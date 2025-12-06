@@ -1,3 +1,4 @@
 Trading_Graphs/
 .env
 __pycache__/
+env/

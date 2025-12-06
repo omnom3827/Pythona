@@ -23,9 +23,14 @@ class StockTrader:
         self.data = self.GetStockData(interval="1h", period="1y")
         self.activeTrades = {}  # Dict with order_id as key for live trading
         self.pendingTrades = {}  # Dict with order_id as key for pending orders
-        self.updateTimeFrameInSeconds = 3600  # 1 day updates
-        self.broker = api.Trading212Broker(api_key="41577564ZgTDFjBZOXuyIZJJfIEjAvJdIDOcW", api_secret="OAuDb_ERnom-Ixzq1SM6OWM1iosAQVzEEGT716PwaSY", paper_trading=True)
-        self._execute_live_order("BUY", f"{self.ticker}_US_EQ", 1, 500)  # Test order execution
+        self.updateTimeFrameInSeconds = 10  # 1 day updates
+
+        self.broker = api.Trading212Broker(api_key=os.getenv("API_KEY"), api_secret=os.getenv("API_SECRET"), paper_trading=True)
+
+        if self.broker.authTestResult == False:
+            print("Cannot Start Live Trading: Authentication Test Failed.")
+            return
+        
         self.TradingUpdateLoop()
 
     def TradingUpdateLoop(self):
@@ -119,10 +124,13 @@ class StockTrader:
             
             # Print status
             total_invested = sum(t["shares"] * latest_price for t in self.activeTrades.values())
+            pending_total = sum(t["shares"] * t["price"] for t in self.pendingTrades.values())
             total_value = self.balance + total_invested
-            print(f"\nStatus: Cash=${self.balance:.2f}, Invested=${total_invested:.2f}, Total=${total_value:.2f}, Positions={len(self.activeTrades)}")
+            print(f"\nStatus: Cash=${self.balance:.2f}, Invested=${total_invested:.2f}, Total=${total_value:.2f}, Positions={len(self.activeTrades)}\nPending Orders={len(self.pendingTrades)} Pending Positisons=${pending_total:.2f}")
+            print(f"Active Trades Detail: {self.activeTrades}")
+            print(f"Pending Trades Detail: {self.pendingTrades}")
 
-            time.sleep(5)  # Wait for 15 minutes before next check
+            time.sleep(self.updateTimeFrameInSeconds)  # Wait for 15 minutes before next check
             timePassedInSeconds += self.updateTimeFrameInSeconds
 
             # Periodically update strategy (e.g., every 24 hours)
@@ -294,14 +302,13 @@ class StockTrader:
             print(f"{type} executed at {price} on {datetime}")
 
     def _execute_live_order(self, order_type, ticker, shares, price):
-        print(f"TODO: Execute {order_type} order for {shares} shares of {ticker} at ${price:.2f}")
-
         if order_type == "BUY":
             result = self.broker.PlaceOrder(ticker=ticker, limitPrice=price + 2, amount=shares)
-            print(f"Buy Order Placed Filled Result: {result.get('filled')}\nOrder Id: {result.get('order_id')}")
 
             #Check If Order Was Successful
             if(result.get("success")):
+                print(f"Buy Order Placed Filled Result: {result.get('filled')}\nOrder Id: {result.get('order_id')}")
+
                 if(not result.get("filled")):
                     order_id = result.get("order_id")
                     self.pendingTrades[order_id] = {
@@ -318,12 +325,15 @@ class StockTrader:
                         "price": price + 2,
                         "order_type": "BUY"
                     }
+            else:
+                print("Buy Order Failed to Place.")
+                return False
         else:
             result = self.broker.PlaceSellOrder(ticker=ticker, limitPrice=price - 2, amount=shares)
-            print(f"Sell Order Placed Filled Result: {result.get('filled')}\nOrder Id: {result.get('order_id')}")
-
             #Check If Order Was Successful
             if(result.get("success")):
+                print(f"Sell Order Placed Filled Result: {result.get('filled')}\nOrder Id: {result.get('order_id')}")
+
                 if(not result.get("filled")):
                     order_id = result.get("order_id")
                     self.pendingTrades[order_id] = {
@@ -340,6 +350,9 @@ class StockTrader:
                         "price": price - 2,
                         "order_type": "SELL"
                     }
+            else:
+                print("Sell Order Failed to Place.")
+                return False
 
         return True  # Return success status
 
@@ -382,7 +395,7 @@ class StockTrader:
             if sharesToBuy > 0 and cost <= cash:
                 # Execute live order if in live mode
                 if live_mode:
-                    success = self._execute_live_order("BUY", self.ticker, sharesToBuy, price)
+                    success = self._execute_live_order("BUY", f"{self.ticker}_US_EQ", sharesToBuy, price)
                     if not success:
                         return activeTrades, cash, nextTradeId, False
                 
@@ -429,6 +442,7 @@ class StockTrader:
         else:
             totalSharesOwned = sum(t["shares"] for t in activeTrades)
             trades_list = [(t["id"], t) for t in activeTrades]  # Convert to same format
+
         risk_factor, sharesToSell = strategy.calculate_risk(
             self.data, data_idx, current_capital=cash, current_shares=totalSharesOwned, mode="sell"
         )
@@ -497,8 +511,6 @@ class StockTrader:
                     remaining_to_sell = 0
                     if tradeHistory is not None and datetime is not None and self.benchmarkGraphs:
                         self.AppendTradeHistory(tradeHistory, "sell", price, datetime, shares_to_close)
-            
-            activeTrades = new_active
             
             activeTrades = new_active
         
@@ -647,7 +659,7 @@ class StockTrader:
         plt.tight_layout()
         try:
             # Ensure output directory exists (use ticker as folder)
-            out_dir = f"Trading_Graphs\{self.ticker}"
+            out_dir = f"Trading_Graphs/{self.ticker}"
             if out_dir and not os.path.exists(out_dir):
                 os.makedirs(out_dir, exist_ok=True)
             filename = f"{out_dir}/Trade_History_{strategyName}.png"
@@ -655,9 +667,5 @@ class StockTrader:
             print(f"Saved trade history to {filename}")
         except Exception as e:
             print(f"Warning: failed to save trade history: {e}")
-#Setup
-api_secret = os.getenv("API_SECRET")
-api_key = os.getenv("API_KEY")
 
 trader = StockTrader(ticker="AAPL", balance=150, strategy="MAC", benchmarkGraphs=True, dynamicRisk=True, takeProfitPercent=0.3, stopLossPercent=0.1)
-trader.UpdateStrategy()

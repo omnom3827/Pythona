@@ -1,5 +1,4 @@
-import base64
-from wsgiref import headers
+import time
 import requests
 from requests.auth import HTTPBasicAuth
 
@@ -7,9 +6,8 @@ class Trading212Broker:
     def __init__(self, api_key, api_secret, paper_trading=True):
         self.api_key = api_key
         self.api_secret = api_secret
-
-        self.credentials_string  = f"{self.api_key}:{self.api_secret}"
-        self.credentials_string = base64.b64encode(self.credentials_string.encode('utf-8')).decode('utf-8')
+        self.apiCooldown = 2
+        self.currentCooldown = 0
 
         if paper_trading:
             self.base_url = "https://demo.trading212.com/api/v0"
@@ -20,15 +18,24 @@ class Trading212Broker:
 
     def Authenticate_Test(self):
         try:
-            # Try running a request to test authentication
+            #Check if we need to wait due to cooldown
+            if self.currentCooldown > 0:
+                print(f"Waiting for API Cooldown: {self.currentCooldown} seconds")
+                time.sleep(self.currentCooldown)
+                self.currentCooldown = 0
 
+            # Try running a request to test authentication
             result = requests.get(f"{self.base_url}/equity/history/orders", params={"limit": 2}, auth=HTTPBasicAuth(self.api_key, self.api_secret), timeout=10)
 
             #Check we got a 200 status code
             if not (200 <= result.status_code < 300):
                 snippet = (result.text or "").strip()[:500]
+                print(result.text)
                 print(f"Authenticate_Test HTTP {result.status_code}: {snippet}")
+                self.currentCooldown = self.apiCooldown
                 return False
+            
+            self.currentCooldown = self.apiCooldown
             
         except Exception as e:
             print(f"Authentication Failed: {e}")
@@ -38,6 +45,17 @@ class Trading212Broker:
         return True
     
     def PlaceOrder(self, ticker, limitPrice, amount):
+        if(self.authTestResult == False):
+            print("Cannot Place Order: Authentication Test Failed.")
+            return {
+                "success": False
+            }
+        
+        if self.currentCooldown > 0:
+            print(f"Waiting for API Cooldown: {self.currentCooldown} seconds")
+            time.sleep(self.currentCooldown)
+            self.currentCooldown = 0
+
         try:
             payload = {
                 "limitPrice": limitPrice,
@@ -56,12 +74,15 @@ class Trading212Broker:
             if not (200 <= result.status_code < 300):
                 snippet = (result.text or "").strip()[:500]
                 print(f"PlaceOrder HTTP {result.status_code}: {snippet}")
+                self.currentCooldown = self.apiCooldown
                 return {
                     "success": False,
                 }
 
             # Check If Order Got Filled Immediately
             order_response = result.json()
+
+            self.currentCooldown = self.apiCooldown
 
             if order_response.get("filledQuantity") == order_response.get("quantity"):
                 print("Order Filled Immediately.")
@@ -85,6 +106,17 @@ class Trading212Broker:
             }
         
     def CheckOrderStatus(self, order):
+        if(self.authTestResult == False):
+            print("Cannot Check Order Status: Authentication Test Failed.")
+            return {
+                "success": False
+            }
+        
+        if self.currentCooldown > 0:
+            print(f"Waiting for API Cooldown: {self.currentCooldown} seconds")
+            time.sleep(self.currentCooldown)
+            self.currentCooldown = 0
+
         try:
             headers = {
                 "Content-Type": "application/json",
@@ -96,6 +128,7 @@ class Trading212Broker:
             #Check If Order Was Cancelled
             if(response.status_code == 404):
                 print(f"Order #{order} Not Found (Possibly Cancelled).")
+                self.currentCooldown = self.apiCooldown
                 return {
                     "success": True,
                     "filled": False,
@@ -106,11 +139,13 @@ class Trading212Broker:
             if not (200 <= response.status_code < 300):
                 snippet = (response.text or "").strip()[:500]
                 print(f"CheckOrderStatus HTTP {response.status_code}: {snippet}")
+                self.currentCooldown = self.apiCooldown
                 return {
                     "success": False,
                 }
             
             order_info = response.json()
+            self.currentCooldown = self.apiCooldown
             print(order_info)
 
             if order_info.get("filledQuantity") == order_info.get("quantity"):
@@ -137,6 +172,17 @@ class Trading212Broker:
             }
 
     def PlaceSellOrder(self, ticker, limitPrice, amount):
+        if(self.authTestResult == False):
+            print("Cannot Place Sell Order: Authentication Test Failed.")
+            return {
+                "success": False
+            }
+        
+        if self.currentCooldown > 0:
+            print(f"Waiting for API Cooldown: {self.currentCooldown} seconds")
+            time.sleep(self.currentCooldown)
+            self.currentCooldown = 0
+
         payload = {
             "stopPrice": limitPrice,
             "quantity": -amount,
@@ -154,11 +200,13 @@ class Trading212Broker:
         if not (200 <= result.status_code < 300):
             snippet = (result.text or "").strip()[:500]
             print(f"PlaceSellOrder HTTP {result.status_code}: {snippet}")
+            self.currentCooldown = self.apiCooldown
             return {
                 "success": False,
             }
-
+        
         sell_response = result.json()
+        self.currentCooldown = self.apiCooldown
 
         if sell_response.get("filledQuantity") == sell_response.get("quantity"):
             print("Sell Order Filled Immediately.")
