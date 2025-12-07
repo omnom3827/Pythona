@@ -149,7 +149,6 @@ class Trading212Broker:
             print(order_info)
 
             if order_info.get("filledQuantity") == order_info.get("quantity"):
-                print("Order Has Been Filled.")
                 return {
                     "success": True,
                     "filled": True,
@@ -157,7 +156,6 @@ class Trading212Broker:
                     "status": order_info.get("status")
                 }
             else:
-                print("Order Has Not Been Filled Yet.")
                 return {
                     "success": True,
                     "filled": False,
@@ -222,3 +220,56 @@ class Trading212Broker:
                 "filled": False,
                 "order_id": sell_response.get("id")
             }
+        
+    def GetExchangeHours(self):
+        if(self.authTestResult == False):
+            print("Cannot Get Exchange Hours: Authentication Test Failed.")
+            return None
+        
+        if self.currentCooldown > 0:
+            print(f"Waiting for API Cooldown: {self.currentCooldown} seconds")
+            time.sleep(self.currentCooldown)
+            self.currentCooldown = 0
+
+        try:
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": self.api_key
+            }
+
+            result = requests.get(f"{self.base_url}/equity/metadata/exchanges", headers=headers, auth=HTTPBasicAuth(self.api_key, self.api_secret))
+
+            if not (200 <= result.status_code < 300):
+                snippet = (result.text or "").strip()[:500]
+                print(f"GetExchangeHours HTTP {result.status_code}: {snippet}")
+                self.currentCooldown = self.apiCooldown
+                return None
+            
+            return result.json()
+        except Exception as e:
+            print(f"GetExchangeHours Failed: {e}")
+            return None
+        
+    def GetAccountBalance(self):
+        if(self.authTestResult == False):
+            print("Cannot Get Account Balance: Authentication Test Failed.")
+            return None
+        
+        if self.currentCooldown > 0:
+            print(f"Waiting for API Cooldown: {self.currentCooldown} seconds")
+            time.sleep(self.currentCooldown)
+            self.currentCooldown = 0
+
+        try:
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": self.api_key
+            }
+
+            result = requests.get(f"{self.base_url}/equity/account/summary", headers=headers, auth=HTTPBasicAuth(self.api_key, self.api_secret))
+
+            print(result.text)
+            return result.json().get("cash").get("availableToTrade")
+        except Exception as e:
+            print(f"GetAccountBalance Failed: {e}")
+            return None

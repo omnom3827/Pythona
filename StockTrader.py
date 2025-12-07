@@ -1,143 +1,158 @@
+import json
 import pandas as pd
 import yfinance as yf
-import numpy as np
 import matplotlib.pyplot as plt
 import os
 import Strategy
-import time
 import Trading212Api as api
-import dotenv
-
-# Load environment variables from .env file
-env = dotenv.dotenv_values(".env")
+from datetime import datetime
 
 class StockTrader:
-    def __init__(self, ticker, balance, strategy, dynamicRisk: bool = True, benchmarkGraphs: bool = False, takeProfitPercent: float = 0.5, stopLossPercent: float = 0.05):
-        self.benchmarkGraphs = benchmarkGraphs
-        self.balance = balance
-        self.ticker = ticker
-        self.strategy = self.GetStrategy(strategy)
-        self.dynamicRisk = dynamicRisk
-        self.stopLossPercent = 0.05
-        self.takeProfitPercent = 0.5
-        self.data = self.GetStockData(interval="1h", period="1y")
-        self.activeTrades = {}  # Dict with order_id as key for live trading
-        self.pendingTrades = {}  # Dict with order_id as key for pending orders
-        self.updateTimeFrameInSeconds = 10  # 1 day updates
-
-        self.broker = api.Trading212Broker(api_key=os.getenv("API_KEY"), api_secret=os.getenv("API_SECRET"), paper_trading=True)
-
-        if self.broker.authTestResult == False:
-            print("Cannot Start Live Trading: Authentication Test Failed.")
+    def __init__(self, ticker, balance, stockMultiHandler, dynamicRisk: bool = True, benchmarkGraphs: bool = False, takeProfitPercent: float = 0.5, stopLossPercent: float = 0.05, marketToTradeIn: str = "NYSE", broker: api.Trading212Broker = None):
+        if(broker is None or stockMultiHandler is None):
+            print(f"Cannot Start Instance For Ticker: {self.ticker}: No Broker Provided.")
             return
         
-        self.TradingUpdateLoop()
+        self.tradingHistoryLocation = f"./TradingHistory/{ticker}_trading_history.json"
+        self.benchmarkGraphs = benchmarkGraphs
+        self.marketToTradeIn = marketToTradeIn
+        self.balance = balance
+        self.ticker = ticker
+        self.strategy = None
+        self.dynamicRisk = dynamicRisk
+        self.stopLossPercent = stopLossPercent
+        self.takeProfitPercent = takeProfitPercent
+        self.stockMultiHandler = stockMultiHandler
+        self.activeTrades = {}  # Dict with order_id as key for live trading
+        self.pendingTrades = {}  # Dict with order_id as key for pending orders
+        self.UpdateStrategy()  # Default To Best Strategy
+        self.data = self.GetStockData(interval="1h", period="1y")
+        self.signals = self.strategy.GetSignals(self.data)
+
+        self.ranMarketCloseMethods = False
+
+
+        self.broker = broker
+
+        #Load Previous Trading History If Exists
+        self.LoadStateFromFile(self.tradingHistoryLocation)
 
     def TradingUpdateLoop(self):
-        """Live trading loop - checks for signals and executes trades in real-time"""
-        nextTradeId = 0
-        timePassedInSeconds = 0
+            
+        #Check current pending trades for fills
+        orders_to_remove = []
         
-        while True:
-            #Check For New Data
-            self.data = self.GetStockData(interval="1h", period="1y")
-            
-            #Check current pending trades for fills
-            orders_to_remove = []
-            for order_id, pending_order in list(self.pendingTrades.items()):
-                order_info = self.broker.CheckOrderStatus(order_id)
+        for order_id, pending_order in list(self.pendingTrades.items()):
+            order_info = self.broker.CheckOrderStatus(order_id)
 
-                if order_info.get("filled"):
-                    # Move from pending to active (only for BUY orders - sells close positions)
-                    if pending_order["type"] == "BUY":
-                        self.activeTrades[order_id] = { 
-                            "shares": pending_order["shares"],
-                            "price": pending_order["price"],
-                            "order_type": "BUY"
-                        }
-                    orders_to_remove.append(order_id)
-                elif order_info.get("status") == "CANCELLED":
-                    print(f"Order #{order_id} was cancelled.")
-                    orders_to_remove.append(order_id)
-                else:
-                    print(f"Order #{order_id} Still Pending.")
-                        
-            
-            # Remove filled orders from pending
-            for order_id in orders_to_remove:
-                del self.pendingTrades[order_id]
+            if order_info.get("filled"):
+                # Move from pending to active (only for BUY orders - sells close positions)
+                if pending_order["type"] == "BUY":
+                    self.activeTrades[order_id] = { 
+                        "shares": pending_order["shares"],
+                        "price": pending_order["price"],
+                        "order_type": "BUY"
+                    }
+                elif pending_order["type"] == "SELL":
+                    # SELL filled - reduce/remove shares from active positions
+                    shares_sold = pending_order["shares"]
 
-            #Check If We Should Buy Or Sell
-            signals = self.strategy.GetSignals(self.data)
-            
-            # Get the most recent signal (last bar)
-            latest_signal = signals.iloc[-1]['Signal']
-            latest_price = signals.iloc[-1]['Close']
-            latest_datetime = signals.iloc[-1]['Datetime']
-            
-            # Calculate total shares owned
-            totalSharesOwned = sum(t["shares"] for t in self.activeTrades.values())
-            
-            # Check stop loss and take profit on existing positions
-            orders_to_remove = []
-            for order_id, trade in self.activeTrades.items():
-                # Check if stop loss hit
-                if latest_price <= trade["buy_price"] * (1 - self.stopLossPercent):
-                    print(f"Stop Loss triggered for trade #{order_id} at ${latest_price:.2f}")
-                    shares_to_sell = trade["shares"]
-                    if self._execute_live_order("SELL", f"{self.ticker}_US_EQ", shares_to_sell, latest_price):
-                        self.balance = round(self.balance + (shares_to_sell * latest_price), 2)
-                        print(f"Sold {shares_to_sell} shares. New balance: ${self.balance:.2f}")
-                        orders_to_remove.append(order_id)
+                    if self.activeTrades.get(pending_order["affectedId"]) is not None:
+                        # Update Share Count
+                        if self.activeTrades[pending_order["affectedId"]]["shares"] - shares_sold <= 0:
+                            del self.activeTrades[pending_order["affectedId"]]
+                            print(f"Position #{pending_order['affectedId']} Fully Closed")
+                        else:
+                            self.activeTrades[pending_order["affectedId"]]["shares"] = round(self.activeTrades[pending_order["affectedId"]]["shares"] - shares_sold, 2)
+                            print(f"Position #{pending_order['affectedId']} Reduced To {self.activeTrades[pending_order['affectedId']]['shares']} Shares")
+                    else:
+                        print(f"Warning: Affected Position #{pending_order['affectedId']} Not Found For Filled SELL Order #{order_id}.")
                 
-                # Check if take profit hit
-                elif latest_price >= trade["buy_price"] * (1 + self.takeProfitPercent):
-                    print(f"Take Profit triggered for trade #{order_id} at ${latest_price:.2f}")
-                    shares_to_sell = trade["shares"]
-                    if self._execute_live_order("SELL", f"{self.ticker}_US_EQ", shares_to_sell, latest_price):
-                        self.balance = round(self.balance + (shares_to_sell * latest_price), 2)
-                        print(f"Sold {shares_to_sell} shares. New balance: ${self.balance:.2f}")
-                        orders_to_remove.append(order_id)
-            
-            # Remove closed positions
-            for order_id in orders_to_remove:
-                del self.activeTrades[order_id]
-            
-            # Execute buy signal
-            if latest_signal == 1:
-                print(f"Buy Signal Detected at {latest_datetime}")
-                self.activeTrades, self.balance, nextTradeId, executed = self.ExecuteBuy(
-                    self.activeTrades, self.balance, latest_price, self.strategy, 
-                    len(signals) - 1, nextTradeId, live_mode=True
-                )
-                if executed:
-                    print(f"Buy executed. Balance: ${self.balance:.2f}, Active trades: {len(self.activeTrades)}")
-            
-            # Execute sell signal
-            elif latest_signal == -1:
-                print(f"Sell Signal Detected at {latest_datetime}")
-                self.activeTrades, self.balance = self.ExecuteSell(
-                    self.activeTrades, self.balance, latest_price, self.strategy,
-                    len(signals) - 1, live_mode=True
-                )
-                print(f"Sell executed. Balance: ${self.balance:.2f}, Active trades: {len(self.activeTrades)}")
-            
-            # Print status
-            total_invested = sum(t["shares"] * latest_price for t in self.activeTrades.values())
-            pending_total = sum(t["shares"] * t["price"] for t in self.pendingTrades.values())
-            total_value = self.balance + total_invested
-            print(f"\nStatus: Cash=${self.balance:.2f}, Invested=${total_invested:.2f}, Total=${total_value:.2f}, Positions={len(self.activeTrades)}\nPending Orders={len(self.pendingTrades)} Pending Positisons=${pending_total:.2f}")
-            print(f"Active Trades Detail: {self.activeTrades}")
-            print(f"Pending Trades Detail: {self.pendingTrades}")
+                orders_to_remove.append(order_id)
+            elif order_info.get("status") == "CANCELLED":
+                print(f"Order #{order_id} Was Cancelled.")
+                orders_to_remove.append(order_id)
+            else:
+                print(f"Order #{order_id} Still Pending.")
+        
+        #Check if its the weekend (markets closed)
+        if(self.stockMultiHandler.IsExchangeOpen(self.marketToTradeIn, datetime.now()) == False and 1 == 2):
+            print("Market Closed. Waiting For Open...")
 
-            time.sleep(self.updateTimeFrameInSeconds)  # Wait for 15 minutes before next check
-            timePassedInSeconds += self.updateTimeFrameInSeconds
-
-            # Periodically update strategy (e.g., every 24 hours)
-            if timePassedInSeconds >= 3600:  # 24 hours
-                print("\n--- Updating Strategy ---")
+            #Update Trading Stratgey While Market Is Closed
+            if(self.ranMarketCloseMethods == False):
+                print("Running Market Close Methods...")
                 self.UpdateStrategy()
-                timePassedInSeconds = 0
+                self.ranMarketCloseMethods = True
+
+                #Save Market Closed State
+                self.SaveStateToFile(self.tradingHistoryLocation)
+
+            return
+        elif (self.ranMarketCloseMethods):
+            print("Market Opened. Resuming Trading.")
+            self.ranMarketCloseMethods = False
+
+        # Remove filled/cancelled orders from pending
+        for order_id in orders_to_remove:
+            del self.pendingTrades[order_id]
+            
+
+        #Check For New Data
+        self.data = self.GetStockData(interval="1h", period="1y")
+        self.signals = self.strategy.GetSignals(self.data)
+
+        # Get the most recent signal (last bar)
+        latest_signal = self.signals.iloc[-1]['Signal']
+        latest_price = self.signals.iloc[-1]['Close']
+        latest_datetime = self.signals.iloc[-1]['Datetime']
+            
+        # Calculate total shares owned
+        totalSharesOwned = sum(t["shares"] for t in self.activeTrades.values())
+            
+        # Check stop loss and take profit on existing positions
+        orders_to_remove = []
+        for order_id, trade in self.activeTrades.items():
+            # Check if stop loss hit
+            if latest_price <= trade["price"] * (1 - self.stopLossPercent):
+                print(f"Stop Loss triggered for trade #{order_id} at ${latest_price:.2f}")
+                shares_to_sell = trade["shares"]
+                if self.LiveOrder("SELL", self.ticker, shares_to_sell, latest_price, orderId=order_id):
+                    print(f"Sold {shares_to_sell} shares. New balance: ${self.balance:.2f}")
+                    orders_to_remove.append(order_id)
+                
+            # Check if take profit hit
+            elif latest_price >= trade["price"] * (1 + self.takeProfitPercent):
+                print(f"Take Profit triggered for trade #{order_id} at ${latest_price:.2f}")
+                shares_to_sell = trade["shares"]
+                if self.LiveOrder("SELL", self.ticker, shares_to_sell, latest_price, orderId=order_id):
+                    print(f"Sold {shares_to_sell} shares. New balance: ${self.balance:.2f}")
+                    orders_to_remove.append(order_id)
+            
+        # Remove closed positions
+        for order_id in orders_to_remove:
+            del self.activeTrades[order_id]
+            
+        # Execute buy signal
+        latest_signal = -1
+        if latest_signal == 1:
+            print(f"Buy Signal Detected at {latest_datetime}")
+            self.BuyApi(self.balance, latest_price)
+        # Execute sell signal
+        elif latest_signal == -1:
+            print(f"Sell Signal Detected at {latest_datetime}")
+            self.SellApi(self.balance, latest_price)
+            
+        # Print status
+        total_invested = sum(t["shares"] * latest_price for t in self.activeTrades.values())
+        pending_total = sum(t["shares"] * t["price"] for t in self.pendingTrades.values())
+        total_value = self.balance + total_invested
+        print(f"\nStatus: Cash=${self.balance:.2f}, Invested=${total_invested:.2f}, Total=${total_value:.2f}, Positions={len(self.activeTrades)}\nPending Orders={len(self.pendingTrades)} Pending Positisons=${pending_total:.2f}")
+        print(f"Active Trades Detail: {self.activeTrades}")
+        print(f"Pending Trades Detail: {self.pendingTrades}")
+
+        # Save State
+        self.SaveStateToFile(self.tradingHistoryLocation)
 
     def GetStrategy(self, strategy: str):
         strategy_map = {
@@ -157,7 +172,7 @@ class StockTrader:
             raise ValueError(f"Unknown strategy: {strategy}. Available: {list(strategy_map.keys())}")
         
     def GetStockData(self, interval: str, period: str):
-        data = yf.download(self.ticker, interval=interval, period=period, auto_adjust=True)
+        data = yf.download(self.ticker.split("_")[0], interval=interval, period=period, auto_adjust=True)
 
         # Flatten MultiIndex columns if present (yfinance can return MultiIndex)
         if isinstance(data.columns, pd.MultiIndex):
@@ -183,11 +198,14 @@ class StockTrader:
         return data
 
     def UpdateStrategy(self):
-        print(f"Updating Strategy From {self.strategy.name}...\nRunning Benchmarks...")
+        if self.strategy is None:
+            print("No current strategy set. Initializing to default strategy.")
+        else:
+            print(f"Updating Strategy From {self.strategy.name}...\nRunning Benchmarks...")
 
-        currentBestStrategy = self.strategy
+        currentBestStrategy = None
         currentBestRoi = 0
-        currentlyBenchmarking = self.strategy
+        currentlyBenchmarking = None
 
         # Get Latest Data For Benchmarking
         self.data = self.GetStockData(interval="1h", period="1y")
@@ -201,11 +219,11 @@ class StockTrader:
             # Debug: Count signals
             buy_signals = (signals['Signal'] == 1).sum()
             sell_signals = (signals['Signal'] == -1).sum()
-            print(f"\n{currentlyBenchmarking.name}: {buy_signals} buy signals, {sell_signals} sell signals")
+            print(f"\n{currentlyBenchmarking.name}: {buy_signals} Buy Signals, {sell_signals} Sell Signals")
 
             # Data For Current Benchmark
             cash = self.balance
-            activeTrades = []  # List of individual trades (each with unique ID, shares, buy_price)
+            activeTrades = []  # List of individual trades (each with unique ID, shares, price)
             nextTradeId = 0
             tradeHistory = []
             trades_executed = 0
@@ -222,7 +240,7 @@ class StockTrader:
                 remainingTrades = []
                 for trade in activeTrades:
                     #Check If Stop Loss Hit
-                    if price <= trade["buy_price"] * (1 - self.stopLossPercent):
+                    if price <= trade["price"] * (1 - self.stopLossPercent):
                         #Get Shares To Sell
                         sharesToSell = trade["shares"]
                         cash = round(cash + (sharesToSell * price), 2)
@@ -232,7 +250,7 @@ class StockTrader:
                         # Trade closed, don't add to remainingTrades
 
                     #Check If Take Profit Hit
-                    elif price >= trade["buy_price"] * (1 + self.takeProfitPercent):
+                    elif price >= trade["price"] * (1 + self.takeProfitPercent):
                         sharesToSell = trade["shares"]
                         cash = round(cash + (sharesToSell * price), 2)
                         #Check If Graphic Benchmarking Enabled
@@ -248,7 +266,7 @@ class StockTrader:
 
                 #Buy Signal - allow multiple concurrent positions
                 if signal == 1:
-                    activeTrades, cash, nextTradeId, executed = self.ExecuteBuy(
+                    activeTrades, cash, nextTradeId, executed = self.ExecuteBuyBenchmark(
                         activeTrades, cash, price, currentlyBenchmarking, i, nextTradeId,
                         tradeHistory, signals.iloc[i]['Datetime'], trades_executed
                     )
@@ -257,7 +275,7 @@ class StockTrader:
                 
                 #Sell Signal - sell from oldest/worst performing trades
                 elif signal == -1:
-                    activeTrades, cash = self.ExecuteSell(
+                    activeTrades, cash = self.ExecuteSellBenchmark(
                         activeTrades, cash, price, currentlyBenchmarking, i,
                         tradeHistory, signals.iloc[i]['Datetime']
                     )
@@ -266,8 +284,6 @@ class StockTrader:
             finalShares = sum(t["shares"] for t in activeTrades)
             totalValue = cash + (finalShares * price)
             roi = (totalValue - self.balance) / self.balance
-            
-            print(f"  Trades executed: {trades_executed}, Final value: ${totalValue:.2f}, ROI: {roi*100:.2f}%")
 
             if self.benchmarkGraphs:
                 self.GraphTradeHistory(tradeHistory, strategyName=currentlyBenchmarking.name)
@@ -301,7 +317,7 @@ class StockTrader:
         else:
             print(f"{type} executed at {price} on {datetime}")
 
-    def _execute_live_order(self, order_type, ticker, shares, price):
+    def LiveOrder(self, order_type, ticker, shares, price, orderId: str = ""):
         if order_type == "BUY":
             result = self.broker.PlaceOrder(ticker=ticker, limitPrice=price + 2, amount=shares)
 
@@ -315,7 +331,7 @@ class StockTrader:
                         "type": "BUY",
                         "ticker": ticker,
                         "shares": shares,
-                        "price": price + 2
+                        "price": price + 2,
                     }
                 else:
                     order_id = result.get("order_id")
@@ -323,10 +339,9 @@ class StockTrader:
                         "shares": shares,
                         "ticker": ticker,
                         "price": price + 2,
-                        "order_type": "BUY"
                     }
             else:
-                print("Buy Order Failed to Place.")
+                print("Buy Order Failed To Place.")
                 return False
         else:
             result = self.broker.PlaceSellOrder(ticker=ticker, limitPrice=price - 2, amount=shares)
@@ -340,38 +355,34 @@ class StockTrader:
                         "type": "SELL",
                         "ticker": ticker,
                         "shares": shares,
-                        "price": price - 2
+                        "price": price - 2,
+                        "affectedId": orderId
                     }
                 else:
-                    order_id = result.get("order_id")
-                    self.pendingTrades[order_id] = {
-                        "shares": shares,
-                        "ticker": ticker,
-                        "price": price - 2,
-                        "order_type": "SELL"
-                    }
+                    #Check If All Shares Sold
+                    if self.activeTrades.get(orderId)["shares"] - shares == 0:
+                        del self.activeTrades[orderId]
+                        self.balance = round(self.balance + (shares * price), 2)
+                    else:
+                        self.activeTrades[orderId]["shares"] = round(self.activeTrades.get(orderId)["shares"] - shares, 2)
+                        self.balance = round(self.balance + (shares * price), 2)
             else:
-                print("Sell Order Failed to Place.")
+                print("Sell Order Failed To Place.")
                 return False
 
         return True  # Return success status
 
-    def ExecuteBuy(self, activeTrades, cash, price, strategy, data_idx, nextTradeId, 
-                   tradeHistory=None, datetime=None, debug_count=0, live_mode=False):
-        """Execute buy signal and return updated (activeTrades, cash, nextTradeId, executed_flag)
-        
-        Args:
-            live_mode: If True, executes real broker orders via _execute_live_order
-        """
+    def ExecuteBuyBenchmark(self, activeTrades, cash, price, strategy, data_idx, nextTradeId, tradeHistory=None, datetime=None, debug_count=0, live_mode=False):
         # Validate we have positive cash to begin with
         if cash <= 0:
             return activeTrades, cash, nextTradeId, False
         
         # Handle both list (benchmark) and dict (live) structures
-        if isinstance(activeTrades, dict):
-            totalSharesOwned = sum(t["shares"] for t in activeTrades.values())
-        else:
+        if isinstance(activeTrades, list):
             totalSharesOwned = sum(t["shares"] for t in activeTrades)
+        else:
+            totalSharesOwned = sum(t["shares"] for t in activeTrades.values())
+
         risk_factor, sharesToBuy = strategy.calculate_risk(
             self.data, data_idx, current_capital=cash, current_shares=totalSharesOwned, mode="buy"
         )
@@ -395,14 +406,14 @@ class StockTrader:
             if sharesToBuy > 0 and cost <= cash:
                 # Execute live order if in live mode
                 if live_mode:
-                    success = self._execute_live_order("BUY", f"{self.ticker}_US_EQ", sharesToBuy, price)
+                    success = self.LiveOrder("BUY", self.ticker, sharesToBuy, price)
                     if not success:
                         return activeTrades, cash, nextTradeId, False
                 
                 # Deduct cost and verify cash doesn't go negative
                 new_cash = round(cash - cost, 2)
                 if new_cash < 0:
-                    print(f"WARNING: Buy would make cash negative! cash={cash}, cost={cost}. Skipping trade.")
+                    print(f"WARNING: Buy Would Make Cash Negative! Cash={cash}, Cost={cost}. Skipping Trade.")
                     return activeTrades, cash, nextTradeId, False
                 
                 cash = new_cash
@@ -413,7 +424,7 @@ class StockTrader:
                     activeTrades.append({
                         "id": nextTradeId,
                         "shares": sharesToBuy,
-                        "buy_price": price
+                        "price": price
                     })
                 nextTradeId += 1
                 
@@ -424,24 +435,66 @@ class StockTrader:
                 return activeTrades, cash, nextTradeId, True
         
         return activeTrades, cash, nextTradeId, False
-
-    def ExecuteSell(self, activeTrades, cash, price, strategy, data_idx, 
-                    tradeHistory=None, datetime=None, live_mode=False):
-        """Execute sell signal and return updated (activeTrades, cash)
+    
+    def BuyApi(self, cash, price):
+        if cash <= 0:
+            print("No Cash Available To Buy Shares.")
+            return
         
-        Args:
-            live_mode: If True, executes real broker orders via _execute_live_order
-        """
+        # Work Out Cost
+        risk_factor, sharesToBuy = self.strategy.calculate_risk(self.data, current_capital=cash, current_shares=sum(t["shares"] for t in self.activeTrades.values()), mode="buy", idx=len(self.data)-1)
+
+        cost = sharesToBuy * price
+
+        #Check we can afford this transaction
+        if sharesToBuy > 0 and cost <= cash:
+            if self.LiveOrder("BUY", self.ticker, sharesToBuy, price):
+                self.balance = round(self.balance - cost, 2)
+                print(f"Buy Order Executed. New Balance: ${self.balance:.2f}")
+
+    
+    def SellApi(self, cash, price):
+        #Work Out Risk
+        riskFactor, sharesToSell = self.strategy.calculate_risk(self.data, current_capital=cash, current_shares=sum(t["shares"] for t in self.activeTrades.values()), mode="sell", idx=len(self.data)-1)
+
+        #Are We Selling More Then 0 Shares
+        if sharesToSell > 0:
+            #Close Losers First
+            sortedTrades = sorted(self.activeTrades.items(), key=lambda item: (price - item[1]["price"]) / item[1]["price"])
+            remaningToSell = sharesToSell
+
+            for order_id, trade in sortedTrades:
+                if remaningToSell <= 0:
+                    break
+
+                #Check If We Are Closing Entire Trade
+                if trade["shares"] <= remaningToSell:
+                    print(f"Running Full Close Sell For Trade Id: {order_id}")
+                    sharesToSell = trade["shares"]
+
+                    if self.LiveOrder("SELL", self.ticker, sharesToSell, price, orderId=order_id):
+                        print(f"Sell Order Ran For Trade Id: {order_id}")
+                        remaningToSell -= sharesToSell
+                else:
+                    print(f"Running Partial Close Sell For Trade Id: {order_id}")
+                    sharesToSell = remaningToSell
+                    
+                    if self.LiveOrder("SELL", self.ticker, sharesToSell, price, orderId=order_id):
+                        print(f"Sell Order Ran For Trade Id: {order_id}")
+                        remaningToSell = 0
+                        break  # Done selling
+
+    def ExecuteSellBenchmark(self, activeTrades, cash, price, strategy, data_idx, tradeHistory=None, datetime=None, live_mode=False):
         if len(activeTrades) == 0:
             return activeTrades, cash
         
         # Handle both list (benchmark) and dict (live) structures
-        if isinstance(activeTrades, dict):
-            totalSharesOwned = sum(t["shares"] for t in activeTrades.values())
-            trades_list = list(activeTrades.items())  # [(order_id, trade), ...]
-        else:
+        if isinstance(activeTrades, list):
             totalSharesOwned = sum(t["shares"] for t in activeTrades)
             trades_list = [(t["id"], t) for t in activeTrades]  # Convert to same format
+        else:
+            totalSharesOwned = sum(t["shares"] for t in activeTrades.values())
+            trades_list = list(activeTrades.items())  # [(order_id, trade), ...]
 
         risk_factor, sharesToSell = strategy.calculate_risk(
             self.data, data_idx, current_capital=cash, current_shares=totalSharesOwned, mode="sell"
@@ -449,40 +502,29 @@ class StockTrader:
         
         if sharesToSell > 0:
             # Sort trades by performance (worst first) to close losing positions
-            sorted_trades = sorted(trades_list, key=lambda item: (price - item[1]["buy_price"]) / item[1]["buy_price"])
+            sorted_trades = sorted(trades_list, key=lambda item: (price - item[1]["price"]) / item[1]["price"])
             
             remaining_to_sell = sharesToSell
             
-            if isinstance(activeTrades, dict):
+            if isinstance(activeTrades, list):
+                new_active = []
+            else:
                 new_active = {}
                 for order_id, trade in activeTrades.items():
                     new_active[order_id] = trade
-            else:
-                new_active = []
             
             for order_id, trade in sorted_trades:
                 if remaining_to_sell <= 0:
-                    if isinstance(activeTrades, list):
-                        new_active.append(trade)
                     continue
                 
                 if trade["shares"] <= remaining_to_sell:
                     # Close entire trade
                     shares_to_close = trade["shares"]
                     
-                    # Execute live order if in live mode
-                    if live_mode:
-                        success = self._execute_live_order("SELL", self.ticker, shares_to_close, price)
-                        if not success:
-                            if isinstance(activeTrades, list):
-                                new_active.append(trade)
-                            continue
-                    
-                    # Remove from dict or don't add to list
                     if isinstance(activeTrades, dict):
                         del new_active[order_id]
-                    # For list, just don't append (already not in new_active)
-                    
+                    # For list, don't add to new_active
+
                     cash = round(cash + (shares_to_close * price), 2)
                     remaining_to_sell -= shares_to_close
                     if tradeHistory is not None and datetime is not None and self.benchmarkGraphs:
@@ -490,14 +532,6 @@ class StockTrader:
                 else:
                     # Partial close
                     shares_to_close = remaining_to_sell
-                    
-                    # Execute live order if in live mode
-                    if live_mode:
-                        success = self._execute_live_order("SELL", self.ticker, shares_to_close, price)
-                        if not success:
-                            if isinstance(activeTrades, list):
-                                new_active.append(trade)
-                            continue
                     
                     cash = round(cash + (shares_to_close * price), 2)
                     
@@ -668,4 +702,40 @@ class StockTrader:
         except Exception as e:
             print(f"Warning: failed to save trade history: {e}")
 
-trader = StockTrader(ticker="AAPL", balance=150, strategy="MAC", benchmarkGraphs=True, dynamicRisk=True, takeProfitPercent=0.3, stopLossPercent=0.1)
+    def SaveStateToFile(self, filepath: str):
+        tradingStatus = {
+            "ticker": self.ticker,
+            "activeTrades": self.activeTrades,
+            "pendingTrades": self.pendingTrades
+        }
+
+        dirLocation = filepath.rsplit('/', 1)[0]
+        
+        if not os.path.exists(filepath):
+            print(f"Creating Directory For Trading State: {dirLocation}")
+            # Make The Directory
+            os.makedirs(dirLocation, exist_ok=True)
+
+        try:
+            with open(filepath, 'w') as f:
+                json.dump(tradingStatus, f, indent=4)
+            print(f"Successfully wrote trading state to {filepath}")
+        except Exception as e:
+            print(f"Warning: failed to write trading state to {filepath}: {e}")
+
+    def LoadStateFromFile(self, filepath: str):
+        if not os.path.exists(filepath):
+            print(f"Previous State File Not Found: {filepath}")
+            return
+        
+        try:
+            with open(filepath, 'r') as f:
+                tradingStatus = json.load(f)
+            
+            self.ticker = tradingStatus.get("ticker", self.ticker)
+            self.activeTrades = tradingStatus.get("activeTrades", {})
+            self.pendingTrades = tradingStatus.get("pendingTrades", {})
+            print(f"Successfully loaded trading state from {filepath}")
+        except Exception as e:
+            print(f"Warning: failed to load trading state from {filepath}: {e}\nSome Trades WILL BE LOST!!!!")
+            print("We Are Working To Add Support To Load From Trading212.")
