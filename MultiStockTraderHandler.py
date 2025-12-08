@@ -1,12 +1,7 @@
 from StockTrader import StockTrader
 from APIs.Trading212Api import Trading212Broker
-import dotenv
-import os
 from datetime import datetime
 import time
-
-env = dotenv.dotenv_values(".env")
-
 class MultiStockTraderHandler:
     def __init__(self, stockTickers: list[str], minBalancePerTrader: float = 100.0, safteyBalancePercent: float = -1.0, exchangeTimesUpdateIntervalSeconds: int = 86400, tradingLoopWaitSeconds: int = 60):
         self.stockTraders = {}
@@ -14,29 +9,10 @@ class MultiStockTraderHandler:
             paper_trading=True
         )
 
-        self.balance = self.broker.GetAccountBalance()
+        self.balance = 0.0
+        self.safteyBalancePercent = safteyBalancePercent
 
-        if self.balance is None:
-            print("Error: Could Not Retrieve Account Balance. Cannot Start Traders.")
-            return
-
-        print(f"Account Balance To Distribute: ${self.balance:.2f}")
-
-        # Check If Auto Saftey Balance Is Enabled
-        if safteyBalancePercent < 0:
-            self.safteyBalance = self.balance * 0.70  # Default To 70% Of Balance
-        else:
-            self.safteyBalance = self.balance * safteyBalancePercent
-
-        # Check If Over 75% Of Capital Is Being Risked
-        if(self.safteyBalance < (self.balance * 0.25)):
-            print(f"Warning: You Are Risking Over 75% Of Your Capital By Setting A Saftey Balance Of ${self.safteyBalance:.2f}. This May Result In Bigger And More Impactful Losses. Remember:\nOnly Invest What You Can Afford To Lose...\nWe Are Not Responsible For Any Losses Incurred By Using This Bot.")
-
-        self.runTimeStartBalance = self.balance - self.safteyBalance
-
-        if self.runTimeStartBalance <= 0:
-            print(f"Error: Saftey Balance Of ${self.safteyBalance:.2f} Is More Than Or Equal To Total Balance Of $1000.00. Cannot Start Traders.")
-            return
+        self.RefreshBalances()
 
         self.exchangeTimes = self.ThisWeekExchangeHours()
         self.timeSinceLastExchangeUpdate = 0
@@ -75,6 +51,11 @@ class MultiStockTraderHandler:
             if self.timeSinceLastExchangeUpdate >= self.exchangeTimesUpdateIntervalSeconds:
                 print("Updating Exchange Hours...")
                 self.UpdateExchangeHours()
+                self.RefreshBalances()
+
+                #Update Each Trader's Balance
+                for trader in self.stockTraders.values():
+                    trader.UpdateBalance(trader.balance + (self.runTimeStartBalance / len(self.stockTraders)) )
 
     def ThisWeekExchangeHours(self):
         exhangeHours = self.broker.GetExchangeHours()
@@ -125,6 +106,31 @@ class MultiStockTraderHandler:
                 isOpen = False
 
         return isOpen
+    
+    def RefreshBalances(self):
+        self.balance = self.broker.GetAccountBalance()
+
+        if self.balance is None:
+            print("Error: Could Not Retrieve Account Balance. Cannot Start Traders.")
+            quit()
+
+        print(f"Account Balance To Distribute: ${self.balance:.2f}")
+
+        # Check If Auto Saftey Balance Is Enabled
+        if self.safteyBalancePercent < 0:
+            self.safteyBalance = self.balance * 0.30  # Default To 70% Of Balance
+        else:
+            self.safteyBalance = self.balance * self.safteyBalancePercent
+
+        # Check If Over 75% Of Capital Is Being Risked
+        if(self.safteyBalance < (self.balance * 0.25)):
+            print(f"Warning: You Are Risking Over 75% Of Your Capital By Setting A Saftey Balance Of ${self.safteyBalance:.2f}. This May Result In Bigger And More Impactful Losses. Remember:\nOnly Invest What You Can Afford To Lose...\nWe Are Not Responsible For Any Losses Incurred By Using This Bot.")
+
+        self.runTimeStartBalance = self.balance - self.safteyBalance
+
+        if self.runTimeStartBalance <= 0:
+            print(f"Error: Saftey Balance Of ${self.safteyBalance:.2f} Is More Than Or Equal To Total Balance Of $1000.00. Cannot Start Traders.")
+            quit()
 
 tickerList = ["AAPL_US_EQ"]
 

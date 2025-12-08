@@ -154,6 +154,9 @@ class StockTrader:
         # Save State
         self.SaveStateToFile(self.tradingHistoryLocation)
 
+    def UpdateBalance(self, newBalance: float):
+        self.balance = newBalance
+
     def GetStrategy(self, strategy: str):
         strategy_map = {
             "MAC": lambda: Strategy.MovingAverageCrossover(short_window=50, long_window=200),
@@ -232,9 +235,6 @@ class StockTrader:
             for i in range(len(signals)):
                 signal = signals.iloc[i]['Signal']
                 price = signals.iloc[i]['Close']
-
-                # Calculate total shares owned across all active trades
-                totalSharesOwned = sum(t["shares"] for t in activeTrades)
 
                 # Check For Stop Loss and Take Profit Triggers on each active trade
                 remainingTrades = []
@@ -488,13 +488,9 @@ class StockTrader:
         if len(activeTrades) == 0:
             return activeTrades, cash
         
-        # Handle both list (benchmark) and dict (live) structures
         if isinstance(activeTrades, list):
             totalSharesOwned = sum(t["shares"] for t in activeTrades)
             trades_list = [(t["id"], t) for t in activeTrades]  # Convert to same format
-        else:
-            totalSharesOwned = sum(t["shares"] for t in activeTrades.values())
-            trades_list = list(activeTrades.items())  # [(order_id, trade), ...]
 
         risk_factor, sharesToSell = strategy.calculate_risk(
             self.data, data_idx, current_capital=cash, current_shares=totalSharesOwned, mode="sell"
