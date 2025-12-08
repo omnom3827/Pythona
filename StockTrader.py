@@ -74,6 +74,10 @@ class StockTrader:
                 orders_to_remove.append(order_id)
             else:
                 print(f"Order #{order_id} Still Pending.")
+
+        # Remove filled/cancelled orders from pending
+        for order_id in orders_to_remove:
+            del self.pendingTrades[order_id]
         
         #Check if its the weekend (markets closed)
         if(self.stockMultiHandler.IsExchangeOpen(self.marketToTradeIn, datetime.now(timezone.utc)) == False):
@@ -92,11 +96,6 @@ class StockTrader:
         elif (self.ranMarketCloseMethods):
             print("Market Opened. Resuming Trading.")
             self.ranMarketCloseMethods = False
-
-        # Remove filled/cancelled orders from pending
-        for order_id in orders_to_remove:
-            del self.pendingTrades[order_id]
-            
 
         #Check For New Data
         self.data = self.GetStockData(interval="1h", period="1y")
@@ -219,7 +218,7 @@ class StockTrader:
 
             signals = currentlyBenchmarking.GetSignals(self.data)
             
-            # Debug: Count signals
+            # Debug: Count signals\
             buy_signals = (signals['Signal'] == 1).sum()
             sell_signals = (signals['Signal'] == -1).sum()
             print(f"\n{currentlyBenchmarking.name}: {buy_signals} Buy Signals, {sell_signals} Sell Signals")
@@ -247,7 +246,6 @@ class StockTrader:
                         #Check If Graphic Benchmarking Enabled
                         if self.benchmarkGraphs:
                             self.AppendTradeHistory(tradeHistory, "stop_loss", price, signals.iloc[i]['Datetime'], sharesToSell)
-                        # Trade closed, don't add to remainingTrades
 
                     #Check If Take Profit Hit
                     elif price >= trade["price"] * (1 + self.takeProfitPercent):
@@ -256,7 +254,6 @@ class StockTrader:
                         #Check If Graphic Benchmarking Enabled
                         if self.benchmarkGraphs:
                             self.AppendTradeHistory(tradeHistory, "take_profit", price, signals.iloc[i]['Datetime'], sharesToSell)
-                        # Trade closed, don't add to remainingTrades
                     else:
                         # Trade still active
                         remainingTrades.append(trade)
@@ -376,12 +373,8 @@ class StockTrader:
         # Validate we have positive cash to begin with
         if cash <= 0:
             return activeTrades, cash, nextTradeId, False
-        
-        # Handle both list (benchmark) and dict (live) structures
-        if isinstance(activeTrades, list):
-            totalSharesOwned = sum(t["shares"] for t in activeTrades)
-        else:
-            totalSharesOwned = sum(t["shares"] for t in activeTrades.values())
+
+        totalSharesOwned = sum(t["shares"] for t in activeTrades)
 
         risk_factor, sharesToBuy = strategy.calculate_risk(
             self.data, data_idx, current_capital=cash, current_shares=totalSharesOwned, mode="buy"
@@ -391,48 +384,30 @@ class StockTrader:
         cost = sharesToBuy * price
         
         # CRITICAL: Ensure we never spend more than available cash
-        if sharesToBuy > 0 and cost <= cash:
-            # Double-check cost doesn't exceed cash (safety for rounding errors)
-            if cost > cash:
-                # Recalculate shares to exactly fit available cash
-                sharesToBuy = round(cash / price, 2)
-                cost = sharesToBuy * price
-                # If still over (due to rounding), reduce by 0.01 shares
-                if cost > cash:
-                    sharesToBuy = max(0.0, sharesToBuy - 0.01)
-                    cost = sharesToBuy * price
-            
-            # Final validation: only proceed if we have valid shares and can afford it
-            if sharesToBuy > 0 and cost <= cash:
-                # Execute live order if in live mode
-                if live_mode:
-                    success = self.LiveOrder("BUY", self.ticker, sharesToBuy, price)
-                    if not success:
-                        return activeTrades, cash, nextTradeId, False
+        if sharesToBuy > 0 and cost <= cash:                          
+            # Deduct cost and verify cash doesn't go negative
+            new_cash = round(cash - cost, 2)
+
+            if new_cash < 0:
+                print(f"WARNING: Buy Would Make Cash Negative! Cash={cash}, Cost={cost}. Skipping Trade.")
+                return activeTrades, cash, nextTradeId, False
                 
-                # Deduct cost and verify cash doesn't go negative
-                new_cash = round(cash - cost, 2)
-                if new_cash < 0:
-                    print(f"WARNING: Buy Would Make Cash Negative! Cash={cash}, Cost={cost}. Skipping Trade.")
-                    return activeTrades, cash, nextTradeId, False
+            cash = new_cash
                 
-                cash = new_cash
+            # Create new trade with unique ID
+            activeTrades.append({
+                "id": nextTradeId,
+                "shares": sharesToBuy,
+                "price": price
+            })
                 
-                # Create new trade with unique ID
-                # In live_mode, _execute_live_order already added to dict, just track the ID was used
-                if not live_mode:
-                    activeTrades.append({
-                        "id": nextTradeId,
-                        "shares": sharesToBuy,
-                        "price": price
-                    })
-                nextTradeId += 1
+            nextTradeId += 1
                 
-                # Optionally record to trade history
-                if tradeHistory is not None and datetime is not None and self.benchmarkGraphs:
-                    self.AppendTradeHistory(tradeHistory, "buy", price, datetime, sharesToBuy)
+            # Optionally record to trade history
+            if tradeHistory is not None and datetime is not None and self.benchmarkGraphs:
+                self.AppendTradeHistory(tradeHistory, "buy", price, datetime, sharesToBuy)
                 
-                return activeTrades, cash, nextTradeId, True
+            return activeTrades, cash, nextTradeId, True
         
         return activeTrades, cash, nextTradeId, False
     
@@ -488,9 +463,7 @@ class StockTrader:
         if len(activeTrades) == 0:
             return activeTrades, cash
         
-        if isinstance(activeTrades, list):
-            totalSharesOwned = sum(t["shares"] for t in activeTrades)
-            trades_list = [(t["id"], t) for t in activeTrades]  # Convert to same format
+        totalSharesOwned = sum(t["shares"] for t in activeTrades)
 
         risk_factor, sharesToSell = strategy.calculate_risk(
             self.data, data_idx, current_capital=cash, current_shares=totalSharesOwned, mode="sell"
@@ -498,31 +471,23 @@ class StockTrader:
         
         if sharesToSell > 0:
             # Sort trades by performance (worst first) to close losing positions
-            sorted_trades = sorted(trades_list, key=lambda item: (price - item[1]["price"]) / item[1]["price"])
+            sorted_trades = sorted(activeTrades, key=lambda item: (price - item["price"]) / item["price"])
             
             remaining_to_sell = sharesToSell
             
-            if isinstance(activeTrades, list):
-                new_active = []
-            else:
-                new_active = {}
-                for order_id, trade in activeTrades.items():
-                    new_active[order_id] = trade
+            new_active = []
             
-            for order_id, trade in sorted_trades:
+            for trade in sorted_trades:
                 if remaining_to_sell <= 0:
                     continue
                 
                 if trade["shares"] <= remaining_to_sell:
                     # Close entire trade
                     shares_to_close = trade["shares"]
-                    
-                    if isinstance(activeTrades, dict):
-                        del new_active[order_id]
-                    # For list, don't add to new_active
 
                     cash = round(cash + (shares_to_close * price), 2)
                     remaining_to_sell -= shares_to_close
+
                     if tradeHistory is not None and datetime is not None and self.benchmarkGraphs:
                         self.AppendTradeHistory(tradeHistory, "sell", price, datetime, shares_to_close)
                 else:
@@ -531,12 +496,8 @@ class StockTrader:
                     
                     cash = round(cash + (shares_to_close * price), 2)
                     
-                    # Update shares in place
-                    if isinstance(activeTrades, dict):
-                        new_active[order_id]["shares"] = round(trade["shares"] - shares_to_close, 2)
-                    else:
-                        trade["shares"] = round(trade["shares"] - shares_to_close, 2)
-                        new_active.append(trade)
+                    trade["shares"] = round(trade["shares"] - shares_to_close, 2)
+                    new_active.append(trade)
                     
                     remaining_to_sell = 0
                     if tradeHistory is not None and datetime is not None and self.benchmarkGraphs:
