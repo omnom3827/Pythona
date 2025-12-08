@@ -6,7 +6,7 @@ Use at your own discretion.
 
 ---
 
-# 🐍 Python Trading Bot (Early Development)
+# 🐍 Pythona (Early Development)
 
 This is an open-source Python trading bot that is **very early in development**, so expect bugs, issues, and incomplete features.
 
