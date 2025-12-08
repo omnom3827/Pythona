@@ -8,7 +8,7 @@ import APIs.Trading212Api as api
 from datetime import datetime, timezone
 
 class StockTrader:
-    def __init__(self, ticker, balance, stockMultiHandler, dynamicRisk: bool = True, benchmarkGraphs: bool = False, takeProfitPercent: float = 0.5, stopLossPercent: float = 0.05, marketToTradeIn: str = "NYSE", broker: api.Trading212Broker = None):
+    def __init__(self, ticker, balance, stockMultiHandler, dynamicRisk: bool = True, benchmarkGraphs: bool = False, takeProfitPercent: float = 0.5, stopLossPercent: float = 0.05, marketToTradeIn: str = "NYSE", broker: api.Trading212Broker = None, stockDataInterval: str = "1h", stockDataPeriod: str = "1y"):
         if(broker is None or stockMultiHandler is None):
             print(f"Cannot Start Instance For Ticker: {self.ticker}: No Broker Provided.")
             return
@@ -23,10 +23,12 @@ class StockTrader:
         self.stopLossPercent = stopLossPercent
         self.takeProfitPercent = takeProfitPercent
         self.stockMultiHandler = stockMultiHandler
+        self.stockDataInterval = stockDataInterval
+        self.stockDataPeriod = stockDataPeriod
         self.activeTrades = {}  # Dict with order_id as key for live trading
         self.pendingTrades = {}  # Dict with order_id as key for pending orders
         self.UpdateStrategy()  # Default To Best Strategy
-        self.data = self.GetStockData(interval="1h", period="1y")
+        self.data = self.GetStockData(interval=self.stockDataInterval, period=self.stockDataPeriod)
         self.signals = self.strategy.GetSignals(self.data)
 
         self.ranMarketCloseMethods = False
@@ -98,7 +100,7 @@ class StockTrader:
             self.ranMarketCloseMethods = False
 
         #Check For New Data
-        self.data = self.GetStockData(interval="1h", period="1y")
+        self.data = self.GetStockData(interval=self.stockDataInterval, period=self.stockDataPeriod)
         self.signals = self.strategy.GetSignals(self.data)
 
         # Get the most recent signal (last bar)
@@ -210,7 +212,7 @@ class StockTrader:
         currentlyBenchmarking = None
 
         # Get Latest Data For Benchmarking
-        self.data = self.GetStockData(interval="1h", period="1y")
+        self.data = self.GetStockData(interval=self.stockDataInterval, period=self.stockDataPeriod)
 
         #Backtest All Strategies
         for strategy in Strategy.strategies.keys():
