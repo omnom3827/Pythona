@@ -186,7 +186,7 @@ class Trading212Broker:
             self.currentCooldown = 0
 
         payload = {
-            "stopPrice": limitPrice,
+            "limitPrice": limitPrice,
             "quantity": -amount,
             "ticker": ticker,
             "timeValidity": "DAY",
@@ -197,7 +197,7 @@ class Trading212Broker:
             "Authorization": self.api_key
         }
 
-        result = requests.post(f"{self.base_url}/equity/orders/stop", json=payload, headers=headers, auth=HTTPBasicAuth(self.api_key, self.api_secret))
+        result = requests.post(f"{self.base_url}/equity/orders/limit", json=payload, headers=headers, auth=HTTPBasicAuth(self.api_key, self.api_secret))
 
         if not (200 <= result.status_code < 300):
             snippet = (result.text or "").strip()[:500]
@@ -276,4 +276,79 @@ class Trading212Broker:
             return result.json().get("cash").get("availableToTrade")
         except Exception as e:
             print(f"GetAccountBalance Failed: {e}")
+            return None
+        
+    def GetOpenPositions(self, ticker):
+        if(self.authTestResult == False):
+            print("Cannot Get Open Positions: Authentication Test Failed.")
+            return None
+        
+        if self.currentCooldown > 0:
+            print(f"Waiting for API Cooldown: {self.currentCooldown} seconds")
+            time.sleep(self.currentCooldown)
+            self.currentCooldown = 0
+
+        try:
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": self.api_key
+            }
+
+            query = {
+                "ticker": ticker
+            }
+
+            result = requests.get(f"{self.base_url}/equity/positions", params=query, headers=headers, auth=HTTPBasicAuth(self.api_key, self.api_secret))
+
+            result = result.json()
+
+            print(result)
+            
+            return {
+                "id": 0,
+                "shares": result[0].get("quantityAvailableForTrading"),
+                "price": result[0].get("averagePricePaid"),
+            }
+        except Exception as e:
+            print(f"GetOpenPositions Failed: {e}")
+            return None
+        
+    def GetAllPendingOrders(self, ticker: str = None):
+        if(self.authTestResult == False):
+            print("Cannot Get All Pending Orders: Authentication Test Failed.")
+            return None
+        
+        if self.currentCooldown > 0:
+            print(f"Waiting for API Cooldown: {self.currentCooldown} seconds")
+            time.sleep(self.currentCooldown)
+            self.currentCooldown = 0
+
+        try:
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": self.api_key
+            }
+
+            result = requests.get(f"{self.base_url}/equity/orders", headers=headers, auth=HTTPBasicAuth(self.api_key, self.api_secret))
+
+            json_result = result.json()
+
+            allOrders = {}
+
+            print(json_result)
+
+            for order in json_result:     
+                if(ticker is not None and ticker != order.get("instrument").get("ticker")):
+                    continue
+
+                allOrders[order.get("id")] = {
+                    "success": True,
+                    "ticker": order.get("instrument").get("ticker"),
+                    "filled": False,
+                    "type": order.get("type"),
+                }
+
+            return allOrders
+        except Exception as e:
+            print(f"GetAllPendingOrders Failed: {e}")
             return None
