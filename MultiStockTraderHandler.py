@@ -1,5 +1,5 @@
 from StockTrader import StockTrader
-from Trading212Api import Trading212Broker
+from APIs.Trading212Api import Trading212Broker
 import dotenv
 import os
 from datetime import datetime
@@ -11,8 +11,6 @@ class MultiStockTraderHandler:
     def __init__(self, stockTickers: list[str], minBalancePerTrader: float = 100.0, safteyBalancePercent: float = -1.0, exchangeTimesUpdateIntervalSeconds: int = 86400, tradingLoopWaitSeconds: int = 60):
         self.stockTraders = {}
         self.broker = Trading212Broker(
-            api_key=os.getenv("API_KEY"),
-            api_secret=os.getenv("API_SECRET"),
             paper_trading=True
         )
 
