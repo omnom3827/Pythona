@@ -1,11 +1,15 @@
 import time
 import requests
 from requests.auth import HTTPBasicAuth
+import dotenv
+import os
+
+env = dotenv.dotenv_values(".env")
 
 class Trading212Broker:
-    def __init__(self, api_key, api_secret, paper_trading=True):
-        self.api_key = api_key
-        self.api_secret = api_secret
+    def __init__(self, paper_trading=True):
+        self.api_key = os.getenv("API_KEY")
+        self.api_secret = os.getenv("API_SECRET")
         self.apiCooldown = 2
         self.currentCooldown = 0
 

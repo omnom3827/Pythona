@@ -4,8 +4,8 @@ import yfinance as yf
 import matplotlib.pyplot as plt
 import os
 import Strategy
-import Trading212Api as api
-from datetime import datetime
+import APIs.Trading212Api as api
+from datetime import datetime, timezone
 
 class StockTrader:
     def __init__(self, ticker, balance, stockMultiHandler, dynamicRisk: bool = True, benchmarkGraphs: bool = False, takeProfitPercent: float = 0.5, stopLossPercent: float = 0.05, marketToTradeIn: str = "NYSE", broker: api.Trading212Broker = None):
@@ -76,7 +76,7 @@ class StockTrader:
                 print(f"Order #{order_id} Still Pending.")
         
         #Check if its the weekend (markets closed)
-        if(self.stockMultiHandler.IsExchangeOpen(self.marketToTradeIn, datetime.now()) == False and 1 == 2):
+        if(self.stockMultiHandler.IsExchangeOpen(self.marketToTradeIn, datetime.now(timezone.utc)) == False):
             print("Market Closed. Waiting For Open...")
 
             #Update Trading Stratgey While Market Is Closed
