@@ -4,7 +4,7 @@ from datetime import datetime
 import time
 
 class MultiStockTraderHandler:
-    def __init__(self, stockTickers: list[str], minBalancePerTrader: float = 100.0, safteyBalancePercent: float = -1.0, exchangeTimesUpdateIntervalSeconds: int = 86400, tradingLoopWaitSeconds: int = 60):
+    def __init__(self, stockTickers: list[str], minBalancePerTrader: float = 100.0, safteyBalancePercent: float = -1.0, exchangeTimesUpdateIntervalSeconds: int = 86400, tradingLoopWaitSeconds: int = 3600):
         self.stockTraders = {}
         self.broker = Trading212Broker(
             paper_trading=True

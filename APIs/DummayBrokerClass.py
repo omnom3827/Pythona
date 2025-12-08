@@ -70,3 +70,22 @@ class DummyBroker:
         # This Method Should Just Return An Account Balance NOT INCLUDING PENDING ORDERS!!
         # For Example: If You Have £1000 And An Active Buy Order Of £200, This Method Should Return £800
         raise NotImplementedError("GetAccountBalance Method Not Implemented Yet.")
+    
+    def GetOpenPositions(self, ticker):
+        # This Method Gets The Open Positions For A Given Ticker And Returns The Following Format And Returns On Position. Using The ID 0:
+        # {
+        # "id": int (The Position ID ALWAYS 0),
+        # "shares": float (The Number Of Shares Currently Held),
+        # "price": float (The Average Price Paid Per Share)
+        # }
+        raise NotImplementedError("GetOpenPositions Method Not Implemented Yet.")
+        
+    def GetAllPendingOrders(self, ticker: str = None):
+        #Gets all the pending order for a given ticker. If no ticker is provided get all pending orders.
+        # Returns a dictionary of order_id to order details in the following format: [Order ID]: {
+        #    "success": True | False (Did The Request Succeed)
+        #    "ticker": str (The Ticker Of The Order)
+        #    "filled": True | False (Was The Order Filled)
+        #    "type": "BUY" | "SELL" (The Type Of The Order)
+        #   }
+        raise NotImplementedError("GetAllPendingOrders Method Not Implemented Yet.")

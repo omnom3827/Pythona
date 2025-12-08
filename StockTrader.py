@@ -695,4 +695,19 @@ class StockTrader:
             print(f"Successfully loaded trading state from {filepath}")
         except Exception as e:
             print(f"Warning: failed to load trading state from {filepath}: {e}\nSome Trades WILL BE LOST!!!!")
+            pendingOrders = self.broker.GetAllPendingOrders(self.ticker)
+            openPosition = self.broker.GetOpenPositions(self.ticker)
+
+            self.activeTrades[openPosition.get("id")] = {
+                "ticker": self.ticker,
+                "shares": openPosition.get("shares"),
+                "price": openPosition.get("price"),
+            }
+
+            for order in pendingOrders:
+                if order.get("type") == "BUY":
+                    print("TODO: Rebuild Pending Buy Orders From Broker Data - Currently Not Supported.")
+                else:
+                    print("TODO: Rebuild Pending Sell Orders From Broker Data - Currently Not Supported.")
+
             print("We Are Working To Add Support To Load From Trading212.")
