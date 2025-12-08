@@ -71,7 +71,7 @@ class MultiStockTraderHandler:
                 # Reformat Working Schdules
                 for schedule in exchange.get("workingSchedules"):
                     for timeEvent in schedule.get("timeEvents"):
-                        if timeEvent.get("type") in ("OPEN", "CLOSE"):
+                        if timeEvent.get("type") in ("OPEN", "CLOSE", "AFTER_HOURS_OPEN"):
                             #See if its happening this week
                             date = datetime.fromisoformat(timeEvent.get("date").replace("Z", "+00:00"))
 
@@ -98,13 +98,17 @@ class MultiStockTraderHandler:
         if exchange not in self.exchangeTimes:
             return False
         
+        print(self.exchangeTimes[exchange])
         todaysSchedules = [schedule for schedule in self.exchangeTimes[exchange] if schedule.get("date").date() == time.date()]
+        print(todaysSchedules)
 
         isOpen = False
         for schedule in todaysSchedules:
             if schedule.get("type") == "OPEN" and schedule.get("date") <= time:
                 isOpen = True
             elif schedule.get("type") == "CLOSE" and schedule.get("date") <= time:
+                isOpen = False
+            elif schedule.get("type") == "AFTER_HOURS_OPEN" and schedule.get("date") <= time:
                 isOpen = False
 
         return isOpen

@@ -108,9 +108,6 @@ class StockTrader:
         latest_price = self.signals.iloc[-1]['Close']
         latest_datetime = self.signals.iloc[-1]['Datetime']
             
-        # Calculate total shares owned
-        totalSharesOwned = sum(t["shares"] for t in self.activeTrades.values())
-            
         # Check stop loss and take profit on existing positions
         orders_to_remove = []
         for order_id, trade in self.activeTrades.items():
