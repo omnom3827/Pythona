@@ -46,6 +46,7 @@ class MultiStockTraderHandler:
                 print("Skipping Trading Update Loop As No Exchange Hours Are Available.")
 
             time.sleep(self.tradingLoopWaitSeconds)  # Wait for specified seconds before the next update loop
+            self.timeSinceLastExchangeUpdate += self.tradingLoopWaitSeconds
 
             #Check If Exchange Hours Need Updated
             if self.timeSinceLastExchangeUpdate >= self.exchangeTimesUpdateIntervalSeconds:
