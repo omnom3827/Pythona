@@ -21,8 +21,17 @@ This is an open-source Python trading bot that is **very early in development**,
 | Alpaca                    | ❎ No Support           |
 | Robinhood                 | ❎ No Support           |
 
----
+### Broker Feature Support
+| Feature | Trading 212 (Paper) | Trading 212 (Live) | Alpaca | Robinhood
+|---------|---------------------|--------------------|--------|-----------|
+| Place Buy Orders | ☑️ | ❎ | ❎ | ❎ | ❎
+| Place Sell Orders | ☑️ | ❎ | ❎ | ❎ | ❎
+| Pull Active OrdersRefreshments (Refresh) | ☑️ | ☑️ | ❎ | ❎ | ❎
+| Pull Pending Orders (Refresh) | ❎ | ❎ | ❎ | ❎ | ❎
+| Get Active Balance | ☑️ | ☑️ | ❎ | ❎ | ❎
+| Get Stock Data | ☑️ | ☑️ | ☑️ | ☑️ | ☑️
 
+---
 ## 🎯 Project Vision & Goals
 
 The goal of this project is to build a simple, easy-to-use trading bot that can eventually support multiple trading platforms.

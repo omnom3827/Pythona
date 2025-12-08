@@ -1,8 +1,6 @@
-import time
+import datetime
 import dotenv
 import os
-import requests
-from requests.auth import HTTPBasicAuth
 
 env = dotenv.dotenv_values(".env")
 
@@ -16,8 +14,9 @@ class DummyBroker:
     def __init__(self, paper_trading=True):
         self.api_key = os.getenv("API_KEY")
         self.api_secret = os.getenv("API_SECRET")
+        self.lastApiRequestTime = datetime.now()
+        #Set this to whatever the broker's API cooldown time is (Seconds Between Requests) OR to space out requests to avoid rate limiting
         self.apiCooldown = 2
-        self.currentCooldown = 0
 
         if paper_trading:
             self.base_url = "https://demo.trading212.com/api/v0"

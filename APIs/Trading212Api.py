@@ -1,4 +1,5 @@
 import time
+from datetime import datetime
 import requests
 from requests.auth import HTTPBasicAuth
 import dotenv
@@ -10,8 +11,8 @@ class Trading212Broker:
     def __init__(self, paper_trading=True):
         self.api_key = os.getenv("API_KEY")
         self.api_secret = os.getenv("API_SECRET")
+        self.lastApiRequestTime = datetime.now()
         self.apiCooldown = 2
-        self.currentCooldown = 0
 
         if paper_trading:
             self.base_url = "https://demo.trading212.com/api/v0"
@@ -22,24 +23,19 @@ class Trading212Broker:
 
     def Authenticate_Test(self):
         try:
-            #Check if we need to wait due to cooldown
-            if self.currentCooldown > 0:
-                print(f"Waiting for API Cooldown: {self.currentCooldown} seconds")
-                time.sleep(self.currentCooldown)
-                self.currentCooldown = 0
+            self.CheckForRateLimitCooldown()
 
             # Try running a request to test authentication
             result = requests.get(f"{self.base_url}/equity/history/orders", params={"limit": 2}, auth=HTTPBasicAuth(self.api_key, self.api_secret), timeout=10)
 
+            self.lastApiRequestTime = datetime.now()
+
             #Check we got a 200 status code
             if not (200 <= result.status_code < 300):
                 snippet = (result.text or "").strip()[:500]
-                print(result.text)
+                print(snippet)
                 print(f"Authenticate_Test HTTP {result.status_code}: {snippet}")
-                self.currentCooldown = self.apiCooldown
                 return False
-            
-            self.currentCooldown = self.apiCooldown
             
         except Exception as e:
             print(f"Authentication Failed: {e}")
@@ -55,10 +51,7 @@ class Trading212Broker:
                 "success": False
             }
         
-        if self.currentCooldown > 0:
-            print(f"Waiting for API Cooldown: {self.currentCooldown} seconds")
-            time.sleep(self.currentCooldown)
-            self.currentCooldown = 0
+        self.CheckForRateLimitCooldown()
 
         try:
             payload = {
@@ -74,33 +67,32 @@ class Trading212Broker:
             }
 
             result = requests.post(f"{self.base_url}/equity/orders/limit", json=payload, headers=headers, auth=HTTPBasicAuth(self.api_key, self.api_secret))
+            # record the timestamp of this API request
+            self.lastApiRequestTime = datetime.now()
 
             if not (200 <= result.status_code < 300):
                 snippet = (result.text or "").strip()[:500]
                 print(f"PlaceOrder HTTP {result.status_code}: {snippet}")
-                self.currentCooldown = self.apiCooldown
                 return {
                     "success": False,
                 }
 
             # Check If Order Got Filled Immediately
-            order_response = result.json()
+            result = result.json()
 
-            self.currentCooldown = self.apiCooldown
-
-            if order_response.get("filledQuantity") == order_response.get("quantity"):
+            if result.get("filledQuantity") == result.get("quantity"):
                 print("Order Filled Immediately.")
                 return {
                     "success": True,
                     "filled": True,
-                    "order_id": order_response.get("id")
+                    "order_id": result.get("id")
                 }
             else:
                 print("Order Not Filled Immediately.")
                 return {
                     "success": True,
                     "filled": False,
-                    "order_id": order_response.get("id")
+                    "order_id": result.get("id")
                 }
             
         except Exception as e:
@@ -116,10 +108,7 @@ class Trading212Broker:
                 "success": False
             }
         
-        if self.currentCooldown > 0:
-            print(f"Waiting for API Cooldown: {self.currentCooldown} seconds")
-            time.sleep(self.currentCooldown)
-            self.currentCooldown = 0
+        self.CheckForRateLimitCooldown()
 
         try:
             headers = {
@@ -127,12 +116,13 @@ class Trading212Broker:
                 "Authorization": self.api_key
             }
 
-            response = requests.get(f"{self.base_url}/equity/orders/{order}", auth=HTTPBasicAuth(self.api_key, self.api_secret), headers=headers)
+            result = requests.get(f"{self.base_url}/equity/orders/{order}", auth=HTTPBasicAuth(self.api_key, self.api_secret), headers=headers)
+
+            self.lastApiRequestTime = datetime.now()
 
             #Check If Order Was Cancelled
-            if(response.status_code == 404):
+            if(result.status_code == 404):
                 print(f"Order #{order} Not Found (Possibly Cancelled).")
-                self.currentCooldown = self.apiCooldown
                 return {
                     "success": True,
                     "filled": False,
@@ -140,31 +130,28 @@ class Trading212Broker:
                     "status": "CANCELLED"
                 }
 
-            if not (200 <= response.status_code < 300):
-                snippet = (response.text or "").strip()[:500]
-                print(f"CheckOrderStatus HTTP {response.status_code}: {snippet}")
-                self.currentCooldown = self.apiCooldown
+            if not (200 <= result.status_code < 300):
+                snippet = (result.text or "").strip()[:500]
+                print(f"CheckOrderStatus HTTP {result.status_code}: {snippet}")
                 return {
                     "success": False,
                 }
             
-            order_info = response.json()
-            self.currentCooldown = self.apiCooldown
-            print(order_info)
+            result = result.json()
 
-            if order_info.get("filledQuantity") == order_info.get("quantity"):
+            if result.get("filledQuantity") == result.get("quantity"):
                 return {
                     "success": True,
                     "filled": True,
-                    "order_id": order_info.get("id"),
-                    "status": order_info.get("status")
+                    "order_id": result.get("id"),
+                    "status": result.get("status")
                 }
             else:
                 return {
                     "success": True,
                     "filled": False,
-                    "order_id": order_info.get("id"),
-                    "status": order_info.get("status")
+                    "order_id": result.get("id"),
+                    "status": result.get("status")
                 }
             
         except Exception as e:
@@ -180,10 +167,7 @@ class Trading212Broker:
                 "success": False
             }
         
-        if self.currentCooldown > 0:
-            print(f"Waiting for API Cooldown: {self.currentCooldown} seconds")
-            time.sleep(self.currentCooldown)
-            self.currentCooldown = 0
+        self.CheckForRateLimitCooldown()
 
         payload = {
             "limitPrice": limitPrice,
@@ -199,30 +183,30 @@ class Trading212Broker:
 
         result = requests.post(f"{self.base_url}/equity/orders/limit", json=payload, headers=headers, auth=HTTPBasicAuth(self.api_key, self.api_secret))
 
+        self.lastApiRequestTime = datetime.now()
+
         if not (200 <= result.status_code < 300):
             snippet = (result.text or "").strip()[:500]
             print(f"PlaceSellOrder HTTP {result.status_code}: {snippet}")
-            self.currentCooldown = self.apiCooldown
             return {
                 "success": False,
             }
         
-        sell_response = result.json()
-        self.currentCooldown = self.apiCooldown
+        result = result.json()
 
-        if sell_response.get("filledQuantity") == sell_response.get("quantity"):
+        if result.get("filledQuantity") == result.get("quantity"):
             print("Sell Order Filled Immediately.")
             return {
                 "success": True,
                 "filled": True,
-                "order_id": sell_response.get("id")
+                "order_id": result.get("id")
             }
         else:
             print("Sell Order Not Filled Immediately.")
             return {
                 "success": True,
                 "filled": False,
-                "order_id": sell_response.get("id")
+                "order_id": result.get("id")
             }
         
     def GetExchangeHours(self):
@@ -230,10 +214,7 @@ class Trading212Broker:
             print("Cannot Get Exchange Hours: Authentication Test Failed.")
             return None
         
-        if self.currentCooldown > 0:
-            print(f"Waiting for API Cooldown: {self.currentCooldown} seconds")
-            time.sleep(self.currentCooldown)
-            self.currentCooldown = 0
+        self.CheckForRateLimitCooldown()
 
         try:
             headers = {
@@ -243,10 +224,11 @@ class Trading212Broker:
 
             result = requests.get(f"{self.base_url}/equity/metadata/exchanges", headers=headers, auth=HTTPBasicAuth(self.api_key, self.api_secret))
 
+            self.lastApiRequestTime = datetime.now()
+
             if not (200 <= result.status_code < 300):
                 snippet = (result.text or "").strip()[:500]
                 print(f"GetExchangeHours HTTP {result.status_code}: {snippet}")
-                self.currentCooldown = self.apiCooldown
                 return None
             
             return result.json()
@@ -259,10 +241,7 @@ class Trading212Broker:
             print("Cannot Get Account Balance: Authentication Test Failed.")
             return None
         
-        if self.currentCooldown > 0:
-            print(f"Waiting for API Cooldown: {self.currentCooldown} seconds")
-            time.sleep(self.currentCooldown)
-            self.currentCooldown = 0
+        self.CheckForRateLimitCooldown()
 
         try:
             headers = {
@@ -272,7 +251,14 @@ class Trading212Broker:
 
             result = requests.get(f"{self.base_url}/equity/account/summary", headers=headers, auth=HTTPBasicAuth(self.api_key, self.api_secret))
 
-            print(result.text)
+            self.lastApiRequestTime = datetime.now()
+
+            if not (200 <= result.status_code < 300):
+                snippet = (result.text or "").strip()[:500]
+                print(f"GetAccountBalance HTTP {result.status_code}: {snippet}")
+                self.lastApiRequestTime = datetime.now()
+                return None
+
             return result.json().get("cash").get("availableToTrade")
         except Exception as e:
             print(f"GetAccountBalance Failed: {e}")
@@ -283,10 +269,7 @@ class Trading212Broker:
             print("Cannot Get Open Positions: Authentication Test Failed.")
             return None
         
-        if self.currentCooldown > 0:
-            print(f"Waiting for API Cooldown: {self.currentCooldown} seconds")
-            time.sleep(self.currentCooldown)
-            self.currentCooldown = 0
+        self.CheckForRateLimitCooldown()
 
         try:
             headers = {
@@ -299,6 +282,14 @@ class Trading212Broker:
             }
 
             result = requests.get(f"{self.base_url}/equity/positions", params=query, headers=headers, auth=HTTPBasicAuth(self.api_key, self.api_secret))
+
+            self.lastApiRequestTime = datetime.now()
+
+            if not (200 <= result.status_code < 300):
+                snippet = (result.text or "").strip()[:500]
+                print(f"GetOpenPositions HTTP {result.status_code}: {snippet}")
+                self.lastApiRequestTime = datetime.now()
+                return None
 
             result = result.json()
 
@@ -318,10 +309,7 @@ class Trading212Broker:
             print("Cannot Get All Pending Orders: Authentication Test Failed.")
             return None
         
-        if self.currentCooldown > 0:
-            print(f"Waiting for API Cooldown: {self.currentCooldown} seconds")
-            time.sleep(self.currentCooldown)
-            self.currentCooldown = 0
+        self.CheckForRateLimitCooldown()
 
         try:
             headers = {
@@ -330,6 +318,13 @@ class Trading212Broker:
             }
 
             result = requests.get(f"{self.base_url}/equity/orders", headers=headers, auth=HTTPBasicAuth(self.api_key, self.api_secret))
+
+            self.lastApiRequestTime = datetime.now()
+
+            if(not (200 <= result.status_code < 300)):
+                snippet = (result.text or "").strip()[:500]
+                print(f"GetAllPendingOrders HTTP {result.status_code}: {snippet}")
+                return None
 
             json_result = result.json()
 
@@ -352,3 +347,11 @@ class Trading212Broker:
         except Exception as e:
             print(f"GetAllPendingOrders Failed: {e}")
             return None
+        
+    def CheckForRateLimitCooldown(self):
+        # Check if last request was within the cooldown period
+        elapsed = (datetime.now() - self.lastApiRequestTime).total_seconds()
+        if elapsed < self.apiCooldown:
+            remaining = self.apiCooldown - elapsed
+            print(f"Waiting for API Cooldown: {int(remaining)} seconds")
+            time.sleep(remaining if remaining > 0 else 0)
