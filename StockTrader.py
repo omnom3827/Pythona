@@ -135,7 +135,6 @@ class StockTrader:
             del self.activeTrades[order_id]
             
         # Execute buy signal
-        latest_signal = -1
         if latest_signal == 1:
             print(f"Buy Signal Detected at {latest_datetime}")
             self.BuyApi(self.balance, latest_price)
@@ -208,7 +207,7 @@ class StockTrader:
             print(f"Updating Strategy From {self.strategy.name}...\nRunning Benchmarks...")
 
         currentBestStrategy = None
-        currentBestRoi = 0
+        currentBestRoi = -101
         currentlyBenchmarking = None
 
         # Get Latest Data For Benchmarking
