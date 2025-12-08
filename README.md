@@ -26,7 +26,7 @@ This is an open-source Python trading bot that is **very early in development**,
 |---------|---------------------|--------------------|--------|-----------|
 | Place Buy Orders | ☑️ | ❎ | ❎ | ❎ | ❎
 | Place Sell Orders | ☑️ | ❎ | ❎ | ❎ | ❎
-| Pull Active OrdersRefreshments (Refresh) | ☑️ | ☑️ | ❎ | ❎ | ❎
+| Pull Active Orders (Refresh) | ☑️ | ☑️ | ❎ | ❎ | ❎
 | Pull Pending Orders (Refresh) | ❎ | ❎ | ❎ | ❎ | ❎
 | Get Active Balance | ☑️ | ☑️ | ❎ | ❎ | ❎
 | Get Stock Data | ☑️ | ☑️ | ☑️ | ☑️ | ☑️
