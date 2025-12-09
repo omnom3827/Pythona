@@ -144,9 +144,15 @@ class StockTrader:
         total_invested = sum(t["shares"] * latest_price for t in self.activeTrades.values())
         pending_total = sum(t["shares"] * t["price"] for t in self.pendingTrades.values())
         total_value = self.balance + total_invested
-        print(f"\nStatus: Cash=${self.balance:.2f}, Invested=${total_invested:.2f}, Total=${total_value:.2f}, Positions={len(self.activeTrades)}\nPending Orders={len(self.pendingTrades)} Pending Positisons=${pending_total:.2f}")
-        print(f"Active Trades Detail: {self.activeTrades}")
-        print(f"Pending Trades Detail: {self.pendingTrades}")
+        self.stockMultiHandler.traderRunHistory[self.ticker] = {
+            "Cash": f"£{self.balance:.2f}",
+            "Invested": f"£{total_invested:.2f}",
+            "Total": f"£{total_value:.2f}",
+            "Positions": len(self.activeTrades),
+            "Pending Orders": len(self.pendingTrades),
+            "Pending Positions Value": pending_total,
+            "Current Trade Strategy": self.strategy.name
+        }
 
         # Save State
         self.SaveStateToFile(self.tradingHistoryLocation)
@@ -199,7 +205,7 @@ class StockTrader:
 
     def UpdateStrategy(self):
         if self.strategy is None:
-            print("No current strategy set. Initializing to default strategy.")
+            print("No Current Strategy Set. Initializing...")
         else:
             print(f"Updating Strategy From {self.strategy.name}...\nRunning Benchmarks...")
 
@@ -209,17 +215,14 @@ class StockTrader:
 
         # Get Latest Data For Benchmarking
         self.data = self.GetStockData(interval=self.stockDataInterval, period=self.stockDataPeriod)
+        # benchmarkResults = pd.DataFrame(columns=["Strategy Name", "Total Value", "ROI"])
+        benchmarkResults = {}
 
         #Backtest All Strategies
         for strategy in Strategy.strategies.keys():
             currentlyBenchmarking = self.GetStrategy(strategy)
 
             signals = currentlyBenchmarking.GetSignals(self.data)
-            
-            # Debug: Count signals\
-            buy_signals = (signals['Signal'] == 1).sum()
-            sell_signals = (signals['Signal'] == -1).sum()
-            print(f"\n{currentlyBenchmarking.name}: {buy_signals} Buy Signals, {sell_signals} Sell Signals")
 
             # Data For Current Benchmark
             cash = self.balance
@@ -283,7 +286,11 @@ class StockTrader:
             if self.benchmarkGraphs:
                 self.GraphTradeHistory(tradeHistory, strategyName=currentlyBenchmarking.name)
             else:
-                print(f"Strategy {currentlyBenchmarking.name} resulted in ROI: {roi*100:.2f}%")
+                benchmarkResults[currentlyBenchmarking.name] = {
+                    "End Value": totalValue,
+                    "ROI": roi,
+                    "Best": False
+                }
 
             #Purge Trade History
             tradeHistory = self.activeTrades
@@ -291,15 +298,19 @@ class StockTrader:
             #Check If Best Strategy
             if roi > currentBestRoi:
                 currentBestRoi = roi
+
+                benchmarkResults[currentlyBenchmarking.name]["Best"] = True
+
+                if currentBestStrategy is not None:
+                    benchmarkResults[currentBestStrategy.name]["Best"] = False
+
                 currentBestStrategy = currentlyBenchmarking
 
         #Set Best Strategy
         self.strategy = currentBestStrategy
 
-        if self.strategy.name != currentlyBenchmarking.name:
-            print(f"New Best Strategy Found: {self.strategy.name} with ROI: {currentBestRoi*100:.2f}%")
-        else:
-            print(f"No Better Strategy Found. Continuing With: {self.strategy.name} with ROI: {currentBestRoi*100:.2f}%")
+        print(f"Benchmark Results For {self.ticker}:")
+        print(pd.DataFrame(benchmarkResults).T)
 
     def AppendTradeHistory(self, tradeHistory, type, price, datetime, shares=None):
         if self.benchmarkGraphs:
@@ -696,11 +707,12 @@ class StockTrader:
             pendingOrders = self.broker.GetAllPendingOrders(self.ticker)
             openPosition = self.broker.GetOpenPositions(self.ticker)
 
-            self.activeTrades[openPosition.get("id")] = {
-                "ticker": self.ticker,
-                "shares": openPosition.get("shares"),
-                "price": openPosition.get("price"),
-            }
+            if openPosition is not None:
+                self.activeTrades[openPosition.get("id")] = {
+                    "ticker": self.ticker,
+                    "shares": openPosition.get("shares"),
+                    "price": openPosition.get("price"),
+                }
 
             for order in pendingOrders:
                 if order.get("type") == "BUY":

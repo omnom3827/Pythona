@@ -66,8 +66,8 @@ class DummyBroker:
         raise NotImplementedError("GetExchangeHours Method Not Implemented Yet.")
         
     def GetAccountBalance(self):
-        # This Method Should Just Return An Account Balance NOT INCLUDING PENDING ORDERS!!
-        # For Example: If You Have £1000 And An Active Buy Order Of £200, This Method Should Return £800
+        # This Method Should Just Return An Account Balance INCLUDING PENDING ORDERS!!
+        # For Example: If You Have £800 And An Active Buy Order Of £200, This Method Should Return £1000
         raise NotImplementedError("GetAccountBalance Method Not Implemented Yet.")
     
     def GetOpenPositions(self, ticker):

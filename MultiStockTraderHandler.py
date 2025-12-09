@@ -1,11 +1,13 @@
 from StockTrader import StockTrader
 from APIs.Trading212Api import Trading212Broker
 from datetime import datetime
+import pandas as pd
 import time
 
 class MultiStockTraderHandler:
     def __init__(self, stockTickers: list[str], minBalancePerTrader: float = 100.0, safteyBalancePercent: float = -1.0, exchangeTimesUpdateIntervalSeconds: int = 86400, tradingLoopWaitSeconds: int = 3600, stockDataInterval: str = "1h", stockDataPeriod: str = "1y"):
         self.stockTraders = {}
+        self.traderRunHistory = {}
         self.broker = Trading212Broker(
             paper_trading=True
         )
@@ -33,7 +35,9 @@ class MultiStockTraderHandler:
         
         # Initialize a StockTrader instance for each ticker
         for ticker in stockTickers:
-            self.stockTraders[ticker] = StockTrader(ticker=ticker, balance=balancePerTrader, benchmarkGraphs=False, broker=self.broker, stockMultiHandler=self, stockDataInterval=stockDataInterval, stockDataPeriod=stockDataPeriod)
+            self.stockTraders[ticker] = StockTrader(ticker=ticker, balance=balancePerTrader, benchmarkGraphs=False, broker=self.broker, 
+                                                    stockMultiHandler=self, stockDataInterval=stockDataInterval, stockDataPeriod=stockDataPeriod, 
+                                                    marketToTradeIn=self.GetExchangeFromTicker(ticker))
         
 
         while True:
@@ -45,6 +49,9 @@ class MultiStockTraderHandler:
                     trader.TradingUpdateLoop()
             else:
                 print("Skipping Trading Update Loop As No Exchange Hours Are Available.")
+
+            print("Trading Loop Result:")
+            print(pd.DataFrame(self.traderRunHistory).T)
 
             time.sleep(self.tradingLoopWaitSeconds)  # Wait for specified seconds before the next update loop
             self.timeSinceLastExchangeUpdate += self.tradingLoopWaitSeconds
@@ -93,14 +100,20 @@ class MultiStockTraderHandler:
             self.timeSinceLastExchangeUpdate = self.exchangeTimesUpdateIntervalSeconds - 1800  # Next Update In 30 Minutes
         else:
             self.timeSinceLastExchangeUpdate = 0
+
+    def GetExchangeFromTicker(self, ticker: str) -> str:
+        #Keep everything after the first underscore
+        ticker = ticker.split("_", 1)[-1]
+        
+        if ticker == "US_EQ":
+            return "NYSE"
     
     def IsExchangeOpen(self, exchange: str, time: datetime) -> bool:
         if exchange not in self.exchangeTimes:
             return False
-        
-        print(self.exchangeTimes[exchange])
+    
         todaysSchedules = [schedule for schedule in self.exchangeTimes[exchange] if schedule.get("date").date() == time.date()]
-        print(todaysSchedules)
+        todaysSchedules.sort(key=lambda x: x.get("date"))
 
         isOpen = False
         for schedule in todaysSchedules:

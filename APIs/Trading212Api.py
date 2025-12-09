@@ -256,10 +256,10 @@ class Trading212Broker:
             if not (200 <= result.status_code < 300):
                 snippet = (result.text or "").strip()[:500]
                 print(f"GetAccountBalance HTTP {result.status_code}: {snippet}")
-                self.lastApiRequestTime = datetime.now()
                 return None
 
-            return result.json().get("cash").get("availableToTrade")
+            result = result.json()
+            return result.get("cash").get("availableToTrade") + result.get("cash").get("reservedForOrders")
         except Exception as e:
             print(f"GetAccountBalance Failed: {e}")
             return None
