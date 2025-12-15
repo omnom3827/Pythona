@@ -68,6 +68,8 @@ class Trading212Broker:
                 "timeValidity": "DAY",
             }
 
+            print(payload)
+
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": self.api_key

@@ -9,10 +9,10 @@ useWebInterface = True
 config = {
     "stockTickers": [
         "AAPL_US_EQ",
-        # "GOOGL_US_EQ",
-        # "NVDA_US_EQ",
-        # "LAES_US_EQ",
-        # "MSFT_US_EQ",
+        "GOOGL_US_EQ",
+        "NVDA_US_EQ",
+        "LAES_US_EQ",
+        "MSFT_US_EQ",
     ]
 }
 

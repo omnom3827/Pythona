@@ -3,9 +3,14 @@ import pandas as pd
 import yfinance as yf
 import matplotlib.pyplot as plt
 import os
+import math
 import Strategy
 import APIs.Trading212Api as api
 from datetime import datetime, timezone
+
+def floor_to_2dp(value):
+    """Round down to 2 decimal places (conservative rounding)"""
+    return math.floor(value * 100) / 100
 
 class StockTrader:
     def __init__(self, ticker, balance, stockMultiHandler, dynamicRisk: bool = True, benchmarkGraphs: bool = False, takeProfitPercent: float = 0.5, stopLossPercent: float = 0.05, marketToTradeIn: str = "NYSE", broker: api.Trading212Broker = None, stockDataInterval: str = "1h", stockDataPeriod: str = "1y"):
@@ -66,7 +71,7 @@ class StockTrader:
                             del self.activeTrades[pending_order["affectedId"]]
                             print(f"Position #{pending_order['affectedId']} Fully Closed")
                         else:
-                            self.activeTrades[pending_order["affectedId"]]["shares"] = round(self.activeTrades[pending_order["affectedId"]]["shares"] - shares_sold, 2)
+                            self.activeTrades[pending_order["affectedId"]]["shares"] = floor_to_2dp(self.activeTrades[pending_order["affectedId"]]["shares"] - shares_sold)
                             print(f"Position #{pending_order['affectedId']} Reduced To {self.activeTrades[pending_order['affectedId']]['shares']} Shares")
                     else:
                         print(f"Warning: Affected Position #{pending_order['affectedId']} Not Found For Filled SELL Order #{order_id}.")
@@ -175,7 +180,7 @@ class StockTrader:
         self.SaveStateToFile(self.tradingHistoryLocation)
 
     def UpdateBalance(self, newBalance: float):
-        self.balance = newBalance
+        self.balance = floor_to_2dp(newBalance)
 
     def GetStrategy(self, strategy: str):
         strategy_map = {
@@ -242,7 +247,7 @@ class StockTrader:
             signals = currentlyBenchmarking.GetSignals(self.data)
 
             # Data For Current Benchmark
-            cash = self.balance
+            cash = floor_to_2dp(self.balance)
             activeTrades = []  # List of individual trades (each with unique ID, shares, price)
             nextTradeId = 0
             tradeHistory = []
@@ -251,7 +256,7 @@ class StockTrader:
             # Run
             for i in range(len(signals)):
                 signal = signals.iloc[i]['Signal']
-                price = signals.iloc[i]['Close']
+                price = floor_to_2dp(signals.iloc[i]['Close'])
 
                 # Check For Stop Loss and Take Profit Triggers on each active trade
                 remainingTrades = []
@@ -259,16 +264,16 @@ class StockTrader:
                     #Check If Stop Loss Hit
                     if price <= trade["price"] * (1 - self.stopLossPercent):
                         #Get Shares To Sell
-                        sharesToSell = trade["shares"]
-                        cash = round(cash + (sharesToSell * price), 2)
+                        sharesToSell = floor_to_2dp(trade["shares"])
+                        cash = floor_to_2dp(cash + (sharesToSell * price))
                         #Check If Graphic Benchmarking Enabled
                         if self.benchmarkGraphs:
                             self.AppendTradeHistory(tradeHistory, "stop_loss", price, signals.iloc[i]['Datetime'], sharesToSell)
 
                     #Check If Take Profit Hit
                     elif price >= trade["price"] * (1 + self.takeProfitPercent):
-                        sharesToSell = trade["shares"]
-                        cash = round(cash + (sharesToSell * price), 2)
+                        sharesToSell = floor_to_2dp(trade["shares"])
+                        cash = floor_to_2dp(cash + (sharesToSell * price))
                         #Check If Graphic Benchmarking Enabled
                         if self.benchmarkGraphs:
                             self.AppendTradeHistory(tradeHistory, "take_profit", price, signals.iloc[i]['Datetime'], sharesToSell)
@@ -296,9 +301,9 @@ class StockTrader:
                     )
 
             #Benchmark Results
-            finalShares = sum(t["shares"] for t in activeTrades)
-            totalValue = cash + (finalShares * price)
-            roi = (totalValue - self.balance) / self.balance
+            finalShares = floor_to_2dp(sum(t["shares"] for t in activeTrades))
+            totalValue = floor_to_2dp(cash + (finalShares * price))
+            roi = floor_to_2dp((totalValue - self.balance) / self.balance * 100) / 100
 
             if self.benchmarkGraphs:
                 self.GraphTradeHistory(tradeHistory, strategyName=currentlyBenchmarking.name)
@@ -343,7 +348,7 @@ class StockTrader:
 
     def LiveOrder(self, order_type, ticker, shares, price, orderId: str = ""):
         if order_type == "BUY":
-            result = self.broker.PlaceOrder(ticker=ticker, limitPrice=price + 2, amount=shares)
+            result = self.broker.PlaceOrder(ticker=ticker, limitPrice=round(price, 2) + 2, amount=shares)
 
             #Check If Order Was Successful
             if(result.get("success")):
@@ -354,21 +359,21 @@ class StockTrader:
                     self.pendingTrades[order_id] = {
                         "type": "BUY",
                         "ticker": ticker,
-                        "shares": shares,
-                        "price": price + 2,
+                        "shares": floor_to_2dp(shares),
+                        "price": floor_to_2dp(price + 2),
                     }
                 else:
                     order_id = result.get("order_id")
                     self.activeTrades[order_id] = {
-                        "shares": shares,
+                        "shares": floor_to_2dp(shares),
                         "ticker": ticker,
-                        "price": price + 2,
+                        "price": floor_to_2dp(price + 2),
                     }
             else:
                 print("Buy Order Failed To Place.")
                 return False
         else:
-            result = self.broker.PlaceSellOrder(ticker=ticker, limitPrice=price - 2, amount=shares)
+            result = self.broker.PlaceSellOrder(ticker=ticker, limitPrice=round(price, 2) - 2, amount=shares)
             #Check If Order Was Successful
             if(result.get("success")):
                 print(f"Sell Order Placed Filled Result: {result.get('filled')}\nOrder Id: {result.get('order_id')}")
@@ -378,18 +383,18 @@ class StockTrader:
                     self.pendingTrades[order_id] = {
                         "type": "SELL",
                         "ticker": ticker,
-                        "shares": shares,
-                        "price": price - 2,
+                        "shares": floor_to_2dp(shares),
+                        "price": floor_to_2dp(price - 2),
                         "affectedId": orderId
                     }
                 else:
                     #Check If All Shares Sold
                     if self.activeTrades.get(orderId)["shares"] - shares == 0:
                         del self.activeTrades[orderId]
-                        self.balance = round(self.balance + (shares * price), 2)
+                        self.balance = floor_to_2dp(self.balance + (shares * price))
                     else:
-                        self.activeTrades[orderId]["shares"] = round(self.activeTrades.get(orderId)["shares"] - shares, 2)
-                        self.balance = round(self.balance + (shares * price), 2)
+                        self.activeTrades[orderId]["shares"] = floor_to_2dp(self.activeTrades.get(orderId)["shares"] - shares)
+                        self.balance = floor_to_2dp(self.balance + (shares * price))
             else:
                 print("Sell Order Failed To Place.")
                 return False
@@ -413,7 +418,7 @@ class StockTrader:
         # CRITICAL: Ensure we never spend more than available cash
         if sharesToBuy > 0 and cost <= cash:                          
             # Deduct cost and verify cash doesn't go negative
-            new_cash = round(cash - cost, 2)
+            new_cash = floor_to_2dp(cash - cost)
 
             if new_cash < 0:
                 print(f"WARNING: Buy Would Make Cash Negative! Cash={cash}, Cost={cost}. Skipping Trade.")
@@ -424,8 +429,8 @@ class StockTrader:
             # Create new trade with unique ID
             activeTrades.append({
                 "id": nextTradeId,
-                "shares": sharesToBuy,
-                "price": price
+                "shares": floor_to_2dp(sharesToBuy),
+                "price": floor_to_2dp(price)
             })
                 
             nextTradeId += 1
@@ -444,20 +449,23 @@ class StockTrader:
             return
         
         # Work Out Cost
-        risk_factor, sharesToBuy = self.strategy.calculate_risk(self.data, idx=len(self.data)-1, current_capital=cash, current_shares=sum(t["shares"] for t in self.activeTrades.values()), mode="buy", idx=len(self.data)-1)
+        risk_factor, sharesToBuy = self.strategy.calculate_risk(self.data, len(self.data)-1, current_capital=cash, current_shares=sum(t["shares"] for t in self.activeTrades.values()), mode="buy")
 
-        cost = sharesToBuy * price
+        sharesToBuy = floor_to_2dp(sharesToBuy)
+        cost = floor_to_2dp(sharesToBuy * price)
 
         #Check we can afford this transaction
         if sharesToBuy > 0 and cost <= cash:
             if self.LiveOrder("BUY", self.ticker, sharesToBuy, price):
-                self.balance = round(self.balance - cost, 2)
+                self.balance = floor_to_2dp(self.balance - cost)
                 print(f"Buy Order Executed. New Balance: ${self.balance:.2f}")
 
     
     def SellApi(self, cash, price):
         #Work Out Risk
-        riskFactor, sharesToSell = self.strategy.calculate_risk(self.data, idx=len(self.data)-1, current_capital=cash, current_shares=sum(t["shares"] for t in self.activeTrades.values()), mode="sell", idx=len(self.data)-1)
+        riskFactor, sharesToSell = self.strategy.calculate_risk(self.data, len(self.data)-1, current_capital=cash, current_shares=sum(t["shares"] for t in self.activeTrades.values()), mode="sell")
+
+        sharesToSell = floor_to_2dp(sharesToSell)
 
         #Are We Selling More Then 0 Shares
         if sharesToSell > 0:
@@ -510,23 +518,23 @@ class StockTrader:
                 
                 if trade["shares"] <= remaining_to_sell:
                     # Close entire trade
-                    shares_to_close = trade["shares"]
+                    shares_to_close = floor_to_2dp(trade["shares"])
 
-                    cash = round(cash + (shares_to_close * price), 2)
-                    remaining_to_sell -= shares_to_close
+                    cash = floor_to_2dp(cash + (shares_to_close * price))
+                    remaining_to_sell = floor_to_2dp(remaining_to_sell - shares_to_close)
 
                     if tradeHistory is not None and datetime is not None and self.benchmarkGraphs:
                         self.AppendTradeHistory(tradeHistory, "sell", price, datetime, shares_to_close)
                 else:
                     # Partial close
-                    shares_to_close = remaining_to_sell
+                    shares_to_close = floor_to_2dp(remaining_to_sell)
                     
-                    cash = round(cash + (shares_to_close * price), 2)
+                    cash = floor_to_2dp(cash + (shares_to_close * price))
                     
-                    trade["shares"] = round(trade["shares"] - shares_to_close, 2)
+                    trade["shares"] = floor_to_2dp(trade["shares"] - shares_to_close)
                     new_active.append(trade)
                     
-                    remaining_to_sell = 0
+                    remaining_to_sell = 0.0
                     if tradeHistory is not None and datetime is not None and self.benchmarkGraphs:
                         self.AppendTradeHistory(tradeHistory, "sell", price, datetime, shares_to_close)
             
