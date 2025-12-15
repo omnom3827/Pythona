@@ -1,16 +1,26 @@
 from StockTrader import StockTrader
 from APIs.Trading212Api import Trading212Broker
 from datetime import datetime
+from MultiStockTraderInstance import MultiStockTradeStatus
 import pandas as pd
 import time
 
 class MultiStockTraderHandler:
-    def __init__(self, stockTickers: list[str], minBalancePerTrader: float = 100.0, safteyBalancePercent: float = -1.0, exchangeTimesUpdateIntervalSeconds: int = 86400, tradingLoopWaitSeconds: int = 3600, stockDataInterval: str = "1h", stockDataPeriod: str = "1y"):
+    def __init__(self, stockTickers: list[str], minBalancePerTrader: float = 100.0, safteyBalancePercent: float = -1.0, exchangeTimesUpdateIntervalSeconds: int = 86400, tradingLoopWaitSeconds: int = 3600, stockDataInterval: str = "1h", stockDataPeriod: str = "1y",
+                 instance: MultiStockTradeStatus = None):
+        self.tradingState = instance
         self.stockTraders = {}
         self.traderRunHistory = {}
+
+        #Update Broker
         self.broker = Trading212Broker(
             paper_trading=True
         )
+
+        if self.tradingState is not None:
+            self.tradingState.Update(
+                CurrentBroker=self.broker.name
+            )
 
         self.balance = 0.0
         self.safteyBalancePercent = safteyBalancePercent
@@ -39,7 +49,7 @@ class MultiStockTraderHandler:
                                                     stockMultiHandler=self, stockDataInterval=stockDataInterval, stockDataPeriod=stockDataPeriod, 
                                                     marketToTradeIn=self.GetExchangeFromTicker(ticker))
         
-
+    def RunUpdateLoop(self):
         while True:
             print(f"MultiStockTraderHandler Update Loop Running At {datetime.now().isoformat()}")
 
@@ -50,8 +60,14 @@ class MultiStockTraderHandler:
             else:
                 print("Skipping Trading Update Loop As No Exchange Hours Are Available.")
 
-            print("Trading Loop Result:")
-            print(pd.DataFrame(self.traderRunHistory).T)
+            if self.tradingState is None:
+                print("Trading Loop Result:")
+                print(pd.DataFrame(self.traderRunHistory).T)
+            else:
+                self.tradingState.Update(
+                    LastUpdate=datetime.now().isoformat(),
+                    Stocks = self.traderRunHistory
+                )
 
             time.sleep(self.tradingLoopWaitSeconds)  # Wait for specified seconds before the next update loop
             self.timeSinceLastExchangeUpdate += self.tradingLoopWaitSeconds
@@ -150,12 +166,3 @@ class MultiStockTraderHandler:
         if self.runTimeStartBalance <= 0:
             print(f"Error: Saftey Balance Of ${self.safteyBalance:.2f} Is More Than Or Equal To Total Balance Of $1000.00. Cannot Start Traders.")
             quit()
-
-tickerList = [
-    "AAPL_US_EQ",
-    "GOOGL_US_EQ",
-    "NVDA_US_EQ",
-    "LAES_US_EQ",
-    "MSFT_US_EQ",
-    ]
-multiTrader = MultiStockTraderHandler(stockTickers=tickerList)

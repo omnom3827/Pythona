@@ -444,7 +444,7 @@ class StockTrader:
             return
         
         # Work Out Cost
-        risk_factor, sharesToBuy = self.strategy.calculate_risk(self.data, current_capital=cash, current_shares=sum(t["shares"] for t in self.activeTrades.values()), mode="buy", idx=len(self.data)-1)
+        risk_factor, sharesToBuy = self.strategy.calculate_risk(self.data, idx=len(self.data)-1, current_capital=cash, current_shares=sum(t["shares"] for t in self.activeTrades.values()), mode="buy", idx=len(self.data)-1)
 
         cost = sharesToBuy * price
 
@@ -457,7 +457,7 @@ class StockTrader:
     
     def SellApi(self, cash, price):
         #Work Out Risk
-        riskFactor, sharesToSell = self.strategy.calculate_risk(self.data, current_capital=cash, current_shares=sum(t["shares"] for t in self.activeTrades.values()), mode="sell", idx=len(self.data)-1)
+        riskFactor, sharesToSell = self.strategy.calculate_risk(self.data, idx=len(self.data)-1, current_capital=cash, current_shares=sum(t["shares"] for t in self.activeTrades.values()), mode="sell", idx=len(self.data)-1)
 
         #Are We Selling More Then 0 Shares
         if sharesToSell > 0:

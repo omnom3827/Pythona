@@ -1,0 +1,22 @@
+<html>
+    <head>
+        <title>Pythona Home Page</title>
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='HomePage.css') }}">
+    </head>
+    <body>
+        <!-- Main Box -->
+        <div id="Main_Box">
+            <h1 id="Main_Title">Pythona Dashboard</h1>
+            <div id="Stock_Grid">
+                <!-- Stock Items will be dynamically inserted here -->
+                {% for key, stock in stocks.items() %}
+                  <div class="Stock" id="stock-{{ key.split('_')[0]|replace(' ','_')|lower }}">
+                    <h1>{{ key.split('_')[0] }}</h1>
+                    <h2>Current Trading Strategy: {{ stock['Current Trade Strategy'] }}</h2>
+                    <h2>Cash: {{ stock['Cash'] }}</h2>
+                  </div>
+                {% endfor %}
+            </div>
+        </div>
+    </body>
+</html>

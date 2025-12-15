@@ -1,0 +1,28 @@
+html, body {
+    height: 100%;
+    margin: 0;
+}
+
+#Main_Box {
+    width: 100%;
+    height: 100%;
+    outline: 1px solid black;
+    background-color: rgb(22, 22, 22);
+    place-items: center; /* centers child grid */
+}
+
+#Stock_Grid {
+    display: grid;
+    gap: 10px;
+    padding: 10px;
+    width: 100%;  /* or 95% */
+    height: 100%; /* or 95% */
+    background-color: aqua;
+}
+
+/* Edit Class*/
+.Stock {
+    max-height: 300px;
+    max-width: 200px;
+    background-color: white;
+}

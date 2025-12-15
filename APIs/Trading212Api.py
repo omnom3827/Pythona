@@ -9,6 +9,13 @@ dotenv.load_dotenv(".env")
 
 class Trading212Broker:
     def __init__(self, paper_trading=True):
+        
+        #Set Name Based On Trading Mode
+        if paper_trading:
+            self.name = "Trading212 (Paper)"
+        else:
+            self.name = "Trading212"
+
         self.api_key = os.getenv("API_KEY")
         self.api_secret = os.getenv("API_SECRET")
         self.lastApiRequestTime = datetime.now()
