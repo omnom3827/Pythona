@@ -1,0 +1,24 @@
+<html>
+    <head>
+        <title>Stock Details - {{ ticker }}</title>
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='HomePage.css') }}">
+    </head>
+    <body>
+        <div id="Main_Box">
+            <h1 id="Main_Title">Details for {{ ticker }}</h1>
+            <div style="padding:12px; max-width:900px; margin:0 auto; background:#fff; border-radius:8px;">
+                {% if stock %}
+                    <h2>Overview</h2>
+                    <ul>
+                    {% for k, v in stock.items() %}
+                        <li><strong>{{ k }}:</strong> {{ v }}</li>
+                    {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>Stock '{{ ticker }}' not found.</p>
+                {% endif %}
+                <p><a href="{{ url_for('home') }}">← Back to dashboard</a></p>
+            </div>
+        </div>
+    </body>
+</html>

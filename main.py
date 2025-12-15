@@ -32,7 +32,7 @@ if useWebInterface:
     print("here")
 
     app = CreateInterface(instance)
-    app.run(debug=False, port=5000, use_reloader=False)
+    app.run(debug=False, port=5000, host='0.0.0.0', use_reloader=False)
 else:
     MultiStockTraderHandler(
         **config,
