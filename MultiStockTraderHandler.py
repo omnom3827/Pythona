@@ -151,6 +151,11 @@ class MultiStockTraderHandler:
             print(f"Error: Saftey Balance Of ${self.safteyBalance:.2f} Is More Than Or Equal To Total Balance Of $1000.00. Cannot Start Traders.")
             quit()
 
-tickerList = ["AAPL_US_EQ"]
-
+tickerList = [
+    "AAPL_US_EQ",
+    "GOOGL_US_EQ",
+    "NVDA_US_EQ",
+    "LAES_US_EQ",
+    "MSFT_US_EQ",
+    ]
 multiTrader = MultiStockTraderHandler(stockTickers=tickerList)

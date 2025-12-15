@@ -25,6 +25,7 @@ class StockTrader:
         self.stockMultiHandler = stockMultiHandler
         self.stockDataInterval = stockDataInterval
         self.stockDataPeriod = stockDataPeriod
+        self.becnhmarkRoi = 0.0
         self.activeTrades = {}  # Dict with order_id as key for live trading
         self.pendingTrades = {}  # Dict with order_id as key for pending orders
         self.UpdateStrategy()  # Default To Best Strategy
@@ -84,6 +85,21 @@ class StockTrader:
         #Check if its the weekend (markets closed)
         if(self.stockMultiHandler.IsExchangeOpen(self.marketToTradeIn, datetime.now(timezone.utc)) == False):
             print("Market Closed. Waiting For Open...")
+
+            total_invested = sum(t["shares"] * latest_price for t in self.activeTrades.values())
+            pending_total = sum(t["shares"] * t["price"] for t in self.pendingTrades.values())
+            total_value = self.balance + total_invested
+
+            self.stockMultiHandler.traderRunHistory[self.ticker] = {
+                "Cash": f"£{self.balance:.2f}",
+                "Invested": f"£{total_invested:.2f}",
+                "Total": f"£{total_value:.2f}",
+                "Positions": len(self.activeTrades),
+                "Pending Orders": len(self.pendingTrades),
+                "Pending Positions Value": pending_total,
+                "Current Trade Strategy": self.strategy.name,
+                "Estimated ROI": f"{self.becnhmarkRoi*100:2f}%"
+            }
 
             #Update Trading Stratgey While Market Is Closed
             if(self.ranMarketCloseMethods == False):
@@ -151,7 +167,8 @@ class StockTrader:
             "Positions": len(self.activeTrades),
             "Pending Orders": len(self.pendingTrades),
             "Pending Positions Value": pending_total,
-            "Current Trade Strategy": self.strategy.name
+            "Current Trade Strategy": self.strategy.name,
+            "Estimated ROI": f"{self.becnhmarkRoi*100:.2f}%"
         }
 
         # Save State
@@ -300,6 +317,7 @@ class StockTrader:
                 currentBestRoi = roi
 
                 benchmarkResults[currentlyBenchmarking.name]["Best"] = True
+                self.becnhmarkRoi = currentBestRoi
 
                 if currentBestStrategy is not None:
                     benchmarkResults[currentBestStrategy.name]["Best"] = False

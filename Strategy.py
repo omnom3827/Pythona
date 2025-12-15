@@ -83,22 +83,19 @@ class RiskCalculatorMixin:
                 concentration_adj = 1.2  # allow more aggressive sizing
 
         # Available capital adjustment: INCREASE risk when high cash available
-        # This is appropriate for small accounts or single-stock strategies
+        # Modified for multi-stock portfolios: only apply when cash is EXTREMELY low
+        # This allows each stock trader to use its allocated balance independently
         capital_adj = 1.0
         if total_equity > 0:
             cash_pct = current_capital / total_equity
-            # Interpretation: high cash = more room to invest = higher risk tolerance
-            # Low cash = already invested = maintain current positions
-            if cash_pct > 0.9:  # > 90% cash (almost fully uninvested)
-                capital_adj = 1.5  # Very aggressive - deploy capital
-            elif cash_pct > 0.7:  # > 70% cash (mostly uninvested)
-                capital_adj = 1.3  # Aggressive
-            elif cash_pct > 0.5:  # > 50% cash (half uninvested)
-                capital_adj = 1.1  # Slightly aggressive
-            elif cash_pct < 0.2:  # < 20% cash (mostly invested)
-                capital_adj = 0.9  # Slightly conservative
-            elif cash_pct < 0.1:  # < 10% cash (nearly fully invested)
+            # Only reduce risk when cash is critically low (nearly fully invested)
+            # This prevents multi-stock scenarios from being overly conservative
+            if cash_pct < 0.05:  # < 5% cash (critically low)
                 capital_adj = 0.7  # Conservative - preserve remaining cash
+            elif cash_pct < 0.10:  # < 10% cash (very low)
+                capital_adj = 0.85  # Slightly conservative
+            # Otherwise maintain neutral capital_adj = 1.0
+            # This treats each trader's allocation as independent
 
         # Compose adjustments and compute a heuristic risk_pct
         adj = vol_adj * trend_adj * concentration_adj * capital_adj

@@ -5,7 +5,7 @@ from requests.auth import HTTPBasicAuth
 import dotenv
 import os
 
-env = dotenv.dotenv_values(".env")
+dotenv.load_dotenv(".env")
 
 class Trading212Broker:
     def __init__(self, paper_trading=True):
