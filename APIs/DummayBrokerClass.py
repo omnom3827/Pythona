@@ -10,8 +10,17 @@ class DummyBroker:
     # api_secret: str - This is the API Secret For The Broker
     # paper_trading: bool - If True, The Broker Will Operate In Paper Trading Mode (No Real Money Is Used)
     # If Your Broker Uses Another Authentication Method Please Modify This Class. DO NOT CHANGE THE ARGS INTO THIS CLASS.
+    # You Should Also Add A Value Called "Name" Which Gives The Broker Name And If Its In Paper Mode
     # Please Be Very Careful Not To Expose Your API Keys/Secrets. You Should Use The .env File To Store Sensitive Information.
+    #Trading 212 Example In This __init__ Method
     def __init__(self, paper_trading=True):
+
+        #Set Name Based On Trading Mode
+        if paper_trading:
+            self.name = "Trading212 (Paper)"
+        else:
+            self.name = "Trading212"
+
         self.api_key = os.getenv("API_KEY")
         self.api_secret = os.getenv("API_SECRET")
         self.lastApiRequestTime = datetime.now()
