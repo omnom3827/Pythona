@@ -3,3 +3,4 @@ TradingHistory/
 .env
 __pycache__/
 env/
+Tools/

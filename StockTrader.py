@@ -13,7 +13,7 @@ def floor_to_2dp(value):
     return math.floor(value * 100) / 100
 
 class StockTrader:
-    def __init__(self, ticker, balance, stockMultiHandler, dynamicRisk: bool = True, benchmarkGraphs: bool = False, takeProfitPercent: float = 0.5, stopLossPercent: float = 0.05, marketToTradeIn: str = "NYSE", broker: api.Trading212Broker = None, stockDataInterval: str = "1h", stockDataPeriod: str = "1y"):
+    def __init__(self, ticker, balance, stockMultiHandler, dynamicRisk: bool = True, benchmarkGraphs: bool = False, takeProfitPercent: float = 0.25, stopLossPercent: float = 0.05, trailingStopPercent: float = 0.15, marketToTradeIn: str = "NYSE", broker: api.Trading212Broker = None, stockDataInterval: str = "1h", stockDataPeriod: str = "1y"):
         if(broker is None or stockMultiHandler is None):
             print(f"Cannot Start Instance For Ticker: {self.ticker}: No Broker Provided.")
             return
@@ -27,6 +27,7 @@ class StockTrader:
         self.dynamicRisk = dynamicRisk
         self.stopLossPercent = stopLossPercent
         self.takeProfitPercent = takeProfitPercent
+        self.trailingStopPercent = trailingStopPercent
         self.stockMultiHandler = stockMultiHandler
         self.stockDataInterval = stockDataInterval
         self.stockDataPeriod = stockDataPeriod
@@ -129,9 +130,17 @@ class StockTrader:
         latest_price = self.signals.iloc[-1]['Close']
         latest_datetime = self.signals.iloc[-1]['Datetime']
             
-        # Check stop loss and take profit on existing positions
+        # Check stop loss, trailing stop, and take profit on existing positions
         orders_to_remove = []
         for order_id, trade in self.activeTrades.items():
+            # Track highest price seen for trailing stop
+            if "highest_price" not in trade:
+                trade["highest_price"] = trade["price"]
+            
+            # Update highest price
+            if latest_price > trade["highest_price"]:
+                trade["highest_price"] = latest_price
+            
             # Check if stop loss hit
             if latest_price <= trade["price"] * (1 - self.stopLossPercent):
                 print(f"Stop Loss triggered for trade #{order_id} at ${latest_price:.2f}")
@@ -140,6 +149,14 @@ class StockTrader:
                     print(f"Sold {shares_to_sell} shares. New balance: ${self.balance:.2f}")
                     orders_to_remove.append(order_id)
                 
+            # Check if trailing stop hit (only after profit threshold)
+            elif latest_price >= trade["price"] * 1.05 and latest_price <= trade["highest_price"] * (1 - self.trailingStopPercent):
+                print(f"Trailing Stop triggered for trade #{order_id} at ${latest_price:.2f} (highest was ${trade['highest_price']:.2f})")
+                shares_to_sell = trade["shares"]
+                if self.LiveOrder("SELL", self.ticker, shares_to_sell, latest_price, orderId=order_id):
+                    print(f"Sold {shares_to_sell} shares. New balance: ${self.balance:.2f}")
+                    orders_to_remove.append(order_id)
+            
             # Check if take profit hit
             elif latest_price >= trade["price"] * (1 + self.takeProfitPercent):
                 print(f"Take Profit triggered for trade #{order_id} at ${latest_price:.2f}")
@@ -258,9 +275,17 @@ class StockTrader:
                 signal = signals.iloc[i]['Signal']
                 price = floor_to_2dp(signals.iloc[i]['Close'])
 
-                # Check For Stop Loss and Take Profit Triggers on each active trade
+                # Check For Stop Loss, Trailing Stop, and Take Profit Triggers on each active trade
                 remainingTrades = []
                 for trade in activeTrades:
+                    # Track highest price for trailing stop
+                    if "highest_price" not in trade:
+                        trade["highest_price"] = trade["price"]
+                    
+                    # Update highest price
+                    if price > trade["highest_price"]:
+                        trade["highest_price"] = price
+                    
                     #Check If Stop Loss Hit
                     if price <= trade["price"] * (1 - self.stopLossPercent):
                         #Get Shares To Sell
@@ -269,6 +294,13 @@ class StockTrader:
                         #Check If Graphic Benchmarking Enabled
                         if self.benchmarkGraphs:
                             self.AppendTradeHistory(tradeHistory, "stop_loss", price, signals.iloc[i]['Datetime'], sharesToSell)
+
+                    #Check If Trailing Stop Hit (only after 5% profit)
+                    elif price >= trade["price"] * 1.05 and price <= trade["highest_price"] * (1 - self.trailingStopPercent):
+                        sharesToSell = floor_to_2dp(trade["shares"])
+                        cash = floor_to_2dp(cash + (sharesToSell * price))
+                        if self.benchmarkGraphs:
+                            self.AppendTradeHistory(tradeHistory, "trailing_stop", price, signals.iloc[i]['Datetime'], sharesToSell)
 
                     #Check If Take Profit Hit
                     elif price >= trade["price"] * (1 + self.takeProfitPercent):
@@ -611,6 +643,13 @@ class StockTrader:
                     if t_shares > 0:
                         cash += price * t_shares
                         shares = max(0, shares - t_shares)
+                elif typ in ('trailing_stop', 'trailing'):
+                    if t_shares is None:
+                        t_shares = shares  # Use all shares if not specified
+                    t_shares = min(t_shares, shares)  # Can't sell more than owned
+                    if t_shares > 0:
+                        cash += price * t_shares
+                        shares = max(0, shares - t_shares)
                 elif typ in ('take_profit', 'tp'):
                     if t_shares is None:
                         t_shares = shares  # Use all shares if not specified
@@ -638,6 +677,7 @@ class StockTrader:
         buys_x, buys_y = [], []
         sells_x, sells_y = [], []
         stops_x, stops_y = [], []
+        trailing_x, trailing_y = [], []
         tps_x, tps_y = [], []
         for idx, trades in trade_map.items():
             trade_time = times[idx]
@@ -651,6 +691,8 @@ class StockTrader:
                     sells_x.append(trade_time); sells_y.append(plot_price)
                 elif typ in ('stop_loss', 'stop'):
                     stops_x.append(trade_time); stops_y.append(plot_price)
+                elif typ in ('trailing_stop', 'trailing'):
+                    trailing_x.append(trade_time); trailing_y.append(plot_price)
                 elif typ in ('take_profit', 'tp'):
                     tps_x.append(trade_time); tps_y.append(plot_price)
 
@@ -660,6 +702,8 @@ class StockTrader:
             ax_price.scatter(sells_x, sells_y, marker='v', color='#EF476F', edgecolors='black', s=60, label='Sell', zorder=6)
         if stops_x:
             ax_price.scatter(stops_x, stops_y, marker='x', color='black', s=50, label='Stop Loss', zorder=6)
+        if trailing_x:
+            ax_price.scatter(trailing_x, trailing_y, marker='s', color='#FFD166', edgecolors='black', s=50, label='Trailing Stop', zorder=6)
         if tps_x:
             ax_price.scatter(tps_x, tps_y, marker='o', color='#118AB2', s=50, label='Take Profit', zorder=6)
 

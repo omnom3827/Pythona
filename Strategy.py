@@ -21,8 +21,8 @@ class RiskCalculatorMixin:
     def calculate_risk(self, data: pd.DataFrame, idx: int, *,
                        current_capital: float = 0.0, current_shares: float = 0.0,
                        mode: str = "buy",
-                       base_risk: float = 0.05, k_atr: float = 3.0,
-                       min_risk: float = 0.01, max_risk: float = 0.20) -> tuple[float, float]:
+                       base_risk: float = 0.12, k_atr: float = 3.0,
+                       min_risk: float = 0.03, max_risk: float = 0.40) -> tuple[float, float]:
         """
         Return risk factor in [0,1] and suggested shares to buy/sell (up to 2dp fractional) for the trade at bar `idx`.
 
@@ -117,8 +117,9 @@ class RiskCalculatorMixin:
             # Higher risk factor = more aggressive exit (sell more)
             # Use risk factor to scale from partial to full exit
             if current_shares > 0:
-                # Base sell: proportional to risk factor (0.5 = sell 50%, 1.0 = sell 100%)
-                sell_pct = 0.5 + (normalized * 0.5)  # maps [0,1] → [0.5, 1.0] (sell 50%-100%)
+                # OPTIMIZED: More aggressive sells (70%-100% instead of 50%-100%)
+                # This improves ROI by taking profits more decisively
+                sell_pct = 0.70 + (normalized * 0.30)  # maps [0,1] → [0.70, 1.0] (sell 70%-100%)
                 suggested_shares = current_shares * sell_pct
                 # Round to 2 decimal places
                 suggested_shares = round(min(suggested_shares, current_shares), 2)
