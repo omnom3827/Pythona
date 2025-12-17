@@ -339,12 +339,12 @@ class StockTrader:
 
             if self.benchmarkGraphs:
                 self.GraphTradeHistory(tradeHistory, strategyName=currentlyBenchmarking.name)
-            else:
-                benchmarkResults[currentlyBenchmarking.name] = {
-                    "End Value": totalValue,
-                    "ROI": roi,
-                    "Best": False
-                }
+
+            benchmarkResults[currentlyBenchmarking.name] = {
+                "End Value": totalValue,
+                "ROI": roi,
+                "Best": False
+            }
 
             #Purge Trade History
             tradeHistory = self.activeTrades
