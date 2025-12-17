@@ -5,20 +5,27 @@ import matplotlib.pyplot as plt
 import os
 import math
 import Strategy
-import APIs.Trading212Api as api
+import APIs.Trading_APIs.Trading212Api as api
+import APIs.Stock_Data_APIs.YahooApi as Yahoo
 from datetime import datetime, timezone
+
+#Module
+from APIs.BackTestBroker import BackTestBroker as BackTester
 
 def floor_to_2dp(value):
     """Round down to 2 decimal places (conservative rounding)"""
     return math.floor(value * 100) / 100
 
 class StockTrader:
-    def __init__(self, ticker, balance, stockMultiHandler, dynamicRisk: bool = True, benchmarkGraphs: bool = False, takeProfitPercent: float = 0.25, stopLossPercent: float = 0.05, trailingStopPercent: float = 0.15, marketToTradeIn: str = "NYSE", broker: api.Trading212Broker = None, stockDataInterval: str = "1h", stockDataPeriod: str = "1y"):
-        if(broker is None or stockMultiHandler is None):
-            print(f"Cannot Start Instance For Ticker: {self.ticker}: No Broker Provided.")
+    def __init__(self, ticker: str, balance: float, stockMultiHandler, dynamicRisk: bool = True, benchmarkGraphs: bool = False, takeProfitPercent: float = 0.25, stopLossPercent: float = 0.05, trailingStopPercent: float = 0.15,
+                 marketToTradeIn: str = "NYSE", broker: api.Trading212Broker = None, stockDataInterval: str = "1h", stockDataPeriod: str = "1y", stocksApi: Yahoo.Yahoo = None):
+        
+        if(broker is None or stockMultiHandler is None or stocksApi is None):
+            print(f"Cannot Start Instance For Ticker: {ticker}: Missing Required Components.")
             return
         
         self.tradingHistoryLocation = f"./TradingHistory/{ticker}_trading_history.json"
+        self.stockApi = stocksApi
         self.benchmarkGraphs = benchmarkGraphs
         self.marketToTradeIn = marketToTradeIn
         self.balance = balance
@@ -35,7 +42,7 @@ class StockTrader:
         self.activeTrades = {}  # Dict with order_id as key for live trading
         self.pendingTrades = {}  # Dict with order_id as key for pending orders
         self.UpdateStrategy()  # Default To Best Strategy
-        self.data = self.GetStockData(interval=self.stockDataInterval, period=self.stockDataPeriod)
+        self.data = self.stockApi.GetStockData(self.ticker.split("_")[0], interval=self.stockDataInterval, period=self.stockDataPeriod)
         self.signals = self.strategy.GetSignals(self.data)
 
         self.ranMarketCloseMethods = False
@@ -88,7 +95,7 @@ class StockTrader:
         for order_id in orders_to_remove:
             del self.pendingTrades[order_id]
         
-        #Check if its the weekend (markets closed)
+        #Check if Exchange is Open
         if(self.stockMultiHandler.IsExchangeOpen(self.marketToTradeIn, datetime.now(timezone.utc)) == False):
             print("Market Closed. Waiting For Open...")
 
@@ -122,7 +129,7 @@ class StockTrader:
             self.ranMarketCloseMethods = False
 
         #Check For New Data
-        self.data = self.GetStockData(interval=self.stockDataInterval, period=self.stockDataPeriod)
+        self.data = self.stockApi.GetStockData(ticker=self.ticker.split("_")[0], interval=self.stockDataInterval, period=self.stockDataPeriod)
         self.signals = self.strategy.GetSignals(self.data)
 
         # Get the most recent signal (last bar)
@@ -215,34 +222,31 @@ class StockTrader:
             return strategy_map[strategy]()
         else:
             raise ValueError(f"Unknown strategy: {strategy}. Available: {list(strategy_map.keys())}")
+
+    def UpdateStrategy(self, newMethod: bool = True):
+
+        if(newMethod):
+            Backtest = BackTester(
+                ticker=self.ticker.split("_")[0],
+                startingBalance=self.balance,
+                interval=self.stockDataInterval,
+                period=self.stockDataPeriod,
+                stopLosePercent=self.stopLossPercent,
+                takeProfitPercent=self.takeProfitPercent,
+                trailingStopPercent=self.trailingStopPercent,
+                startingShares=self.activeTrades
+            )
+
+            strategy, roi = Backtest.RunBackTest()
+
+            self.becnhmarkRoi = roi
+            self.strategy = strategy
+            print("Used New Strategy Update Method.")
+            return
         
-    def GetStockData(self, interval: str, period: str):
-        data = yf.download(self.ticker.split("_")[0], interval=interval, period=period, auto_adjust=True)
+        print("THIS METHOD HAS BEEN SUPERSEDED BY A NEW METHOD AND WILL BE REMOVED IN FUTURE VERSIONS."
+        "PLEASE EXPECT ISSUES AND INCORRECT ROI RETURNS WHEN USING THIS METHOD.")
 
-        # Flatten MultiIndex columns if present (yfinance can return MultiIndex)
-        if isinstance(data.columns, pd.MultiIndex):
-            data.columns = ['_'.join(filter(None, col)).strip() for col in data.columns.values]
-
-        # Normalize column names (e.g. 'Close_Adj' -> 'Close')
-        renameMap = {column: column.split('_')[0] for column in data.columns}
-        data = data.rename(columns=renameMap)
-
-        # Ensure there's always a `Datetime` column.
-        # Many data sources return a DatetimeIndex rather than a column; reset the index when needed.
-        if 'Datetime' not in data.columns:
-            data = data.reset_index()
-            # If reset_index didn't produce a 'Datetime' column name (index had no name), rename the first column
-            if 'Datetime' not in data.columns and len(data.columns) > 0:
-                first_col = data.columns[0]
-                data = data.rename(columns={first_col: 'Datetime'})
-
-        data['Datetime'] = pd.to_datetime(data['Datetime'])
-
-        data = data.sort_values(by='Datetime')
-
-        return data
-
-    def UpdateStrategy(self):
         if self.strategy is None:
             print("No Current Strategy Set. Initializing...")
         else:
@@ -253,7 +257,7 @@ class StockTrader:
         currentlyBenchmarking = None
 
         # Get Latest Data For Benchmarking
-        self.data = self.GetStockData(interval=self.stockDataInterval, period=self.stockDataPeriod)
+        self.data = self.stockApi.GetStockData(ticker=self.ticker.split("_")[0], interval=self.stockDataInterval, period=self.stockDataPeriod)
         # benchmarkResults = pd.DataFrame(columns=["Strategy Name", "Total Value", "ROI"])
         benchmarkResults = {}
 

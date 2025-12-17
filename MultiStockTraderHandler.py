@@ -1,5 +1,6 @@
 from StockTrader import StockTrader
-from APIs.Trading212Api import Trading212Broker
+from APIs.Trading_APIs.Trading212Api import Trading212Broker
+from APIs.Stock_Data_APIs.YahooApi import Yahoo
 from datetime import datetime
 from MultiStockTraderInstance import MultiStockTradeStatus
 import pandas as pd
@@ -11,6 +12,7 @@ class MultiStockTraderHandler:
         self.tradingState = instance
         self.stockTraders = {}
         self.traderRunHistory = {}
+        self.stockApi = Yahoo()
 
         #Update Broker
         self.broker = Trading212Broker(
@@ -47,7 +49,7 @@ class MultiStockTraderHandler:
         for ticker in stockTickers:
             self.stockTraders[ticker] = StockTrader(ticker=ticker, balance=balancePerTrader, benchmarkGraphs=False, broker=self.broker, 
                                                     stockMultiHandler=self, stockDataInterval=stockDataInterval, stockDataPeriod=stockDataPeriod, 
-                                                    marketToTradeIn=self.GetExchangeFromTicker(ticker))
+                                                    marketToTradeIn=self.GetExchangeFromTicker(ticker), stocksApi=self.stockApi)
         
     def RunUpdateLoop(self):
         while True:
