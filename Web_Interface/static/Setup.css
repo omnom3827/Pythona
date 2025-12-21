@@ -1,0 +1,75 @@
+/* Setup.css - styled to match Login/HomePage theme
+   Readable, indented, and uses the same variables as other pages */
+
+:root {
+	--bg: #161616;
+	--panel: #0f172a;
+	--muted: #cbd5e1;
+	--accent: #007BFF;
+}
+
+html,
+body {
+	height: 100%;
+	margin: 0;
+	background: var(--bg);
+	color: #e6eef8;
+	font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+#Login_Box {
+	width: 420px;
+	max-width: 94%;
+	margin: 56px auto;
+	background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent), var(--panel);
+	padding: 28px;
+	border-radius: 12px;
+	box-shadow: 0 12px 40px rgba(2,6,23,0.6);
+	border: 1px solid rgba(255,255,255,0.03);
+}
+
+#Login_Title {
+	margin: 0 0 16px 0;
+	font-size: 22px;
+	color: #fff;
+	text-align: center;
+	font-weight: 600;
+}
+
+form label {
+	display: block;
+	margin-top: 10px;
+	color: var(--muted);
+	font-size: 13px;
+}
+
+form input {
+	width: 100%;
+	padding: 10px 12px;
+	margin-top: 8px;
+	border-radius: 8px;
+	border: 1px solid rgba(71,85,105,0.6);
+	background: #07111a;
+	color: #e6eef8;
+	box-sizing: border-box;
+}
+
+button {
+	width: 100%;
+	margin-top: 16px;
+	padding: 10px 14px;
+	border-radius: 10px;
+	border: none;
+	background: var(--accent);
+	color: #fff;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+button:hover { filter: brightness(.95); }
+
+@media (max-width: 520px) {
+	#Login_Box { margin: 28px 12px; padding: 18px; }
+	#Login_Title { font-size: 18px; }
+}
+

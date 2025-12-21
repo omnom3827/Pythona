@@ -5,6 +5,7 @@ from datetime import datetime
 from MultiStockTraderInstance import MultiStockTradeStatus
 import pandas as pd
 import time
+from functools import wraps
 
 class MultiStockTraderHandler:
     def __init__(self, stockTickers: list[str], minBalancePerTrader: float = 100.0, safteyBalancePercent: float = -1.0, exchangeTimesUpdateIntervalSeconds: int = 86400, tradingLoopWaitSeconds: int = 3600, stockDataInterval: str = "1h", stockDataPeriod: str = "1y",
@@ -50,7 +51,6 @@ class MultiStockTraderHandler:
             self.stockTraders[ticker] = StockTrader(ticker=ticker, balance=balancePerTrader, benchmarkGraphs=False, broker=self.broker, 
                                                     stockMultiHandler=self, stockDataInterval=stockDataInterval, stockDataPeriod=stockDataPeriod, 
                                                     marketToTradeIn=self.GetExchangeFromTicker(ticker), stocksApi=self.stockApi)
-        
     def RunUpdateLoop(self):
         while True:
             print(f"MultiStockTraderHandler Update Loop Running At {datetime.now().isoformat()}")

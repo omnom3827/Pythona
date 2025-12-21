@@ -1,0 +1,19 @@
+<html>
+    <head>
+        <title>Pythona Login</title>
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='Setup.css') }}">
+    </head>
+    <body>
+        <!-- Login Box -->
+        <div id="Login_Box">
+            <h1 id="Login_Title">Pythona Login</h1>
+            <form method="POST" action="{{ url_for('addUser') }}">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" required>
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+                <button type="submit">Make User</button>
+            </form>
+        </div>
+    </body>
+</html>

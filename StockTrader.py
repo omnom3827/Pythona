@@ -7,6 +7,7 @@ import math
 import Strategy
 import APIs.Trading_APIs.Trading212Api as api
 import APIs.Stock_Data_APIs.YahooApi as Yahoo
+from Tools.StockOptimiser import StockOptimiser
 from datetime import datetime, timezone
 
 #Module
@@ -18,8 +19,7 @@ def floor_to_2dp(value):
 
 class StockTrader:
     def __init__(self, ticker: str, balance: float, stockMultiHandler, dynamicRisk: bool = True, benchmarkGraphs: bool = False, takeProfitPercent: float = 0.25, stopLossPercent: float = 0.05, trailingStopPercent: float = 0.15,
-                 marketToTradeIn: str = "NYSE", broker: api.Trading212Broker = None, stockDataInterval: str = "1h", stockDataPeriod: str = "1y", stocksApi: Yahoo.Yahoo = None):
-        
+                 marketToTradeIn: str = "NYSE", broker: api.Trading212Broker = None, stockDataInterval: str = "1h", stockDataPeriod: str = "1y", stocksApi: Yahoo.Yahoo = None, weekendsToWaitBeforeReconfig: int = 1):
         if(broker is None or stockMultiHandler is None or stocksApi is None):
             print(f"Cannot Start Instance For Ticker: {ticker}: Missing Required Components.")
             return
@@ -44,9 +44,10 @@ class StockTrader:
         self.UpdateStrategy()  # Default To Best Strategy
         self.data = self.stockApi.GetStockData(self.ticker.split("_")[0], interval=self.stockDataInterval, period=self.stockDataPeriod)
         self.signals = self.strategy.GetSignals(self.data)
+        self.weekendsSinceLastReconfig = 0
+        self.weekendsToWaitBeforeReconfig = weekendsToWaitBeforeReconfig
 
         self.ranMarketCloseMethods = False
-
 
         self.broker = broker
 
@@ -103,6 +104,26 @@ class StockTrader:
             pending_total = sum(t["shares"] * t["price"] for t in self.pendingTrades.values())
             total_value = self.balance + total_invested
 
+            #Is It A Weekend
+            if(self.weekendsSinceLastReconfig >= self.weekendsToWaitBeforeReconfig and datetime.now().weekday() >=5):
+                print("Running Main Stock Optimisation. This Will Take A While")
+                bestConfig = StockOptimiser(tickers=[self.ticker.split("_")[0]], initial_balance=self.balance, period="1y", interval="1h", stockDataApi=self.stockApi).RunOptimisation(loggingLevel=1, runtimeHistoryLimit=5)
+
+                #Update Settings With New Best Config
+                self.stopLossPercent = bestConfig[self.ticker.split("_")[0]]["params"]["stopLossPercent"]
+                self.takeProfitPercent = bestConfig[self.ticker.split("_")[0]]["params"]["takeProfitPercent"]
+                self.trailingStopPercent = bestConfig[self.ticker.split("_")[0]]["params"]["trailingStopPercent"]
+                self.becnhmarkRoi = bestConfig[self.ticker.split("_")[0]]["roi"]
+                self.strategy = bestConfig[self.ticker.split("_")[0]]["tradingMethod"]
+                print(f"Updated Trading Parameters For {self.ticker}:\nStop Loss: {self.stopLossPercent}\nTake Profit: {self.takeProfitPercent}\nTrailing Stop: {self.trailingStopPercent}\nEstimated ROI: {self.becnhmarkRoi*100:.2f}%\nStrategy: {bestConfig[self.ticker.split('_')[0]]['tradingMethod'].name}")
+                self.weekendsSinceLastReconfig = 0
+            #Update Trading Stratgey While Market Is Closed
+            elif (self.ranMarketCloseMethods == False):
+                print("Running Market Close Methods...")
+                self.UpdateStrategy()
+                self.ranMarketCloseMethods = True
+                self.weekendsSinceLastReconfig += 1
+
             self.stockMultiHandler.traderRunHistory[self.ticker] = {
                 "Cash": f"£{self.balance:.2f}",
                 "Invested": f"£{total_invested:.2f}",
@@ -113,15 +134,8 @@ class StockTrader:
                 "Current Trade Strategy": self.strategy.name,
                 "Estimated ROI": f"{self.becnhmarkRoi*100:2f}%"
             }
-
-            #Update Trading Stratgey While Market Is Closed
-            if(self.ranMarketCloseMethods == False):
-                print("Running Market Close Methods...")
-                self.UpdateStrategy()
-                self.ranMarketCloseMethods = True
-
-                #Save Market Closed State
-                self.SaveStateToFile(self.tradingHistoryLocation)
+            
+            self.SaveStateToFile(self.tradingHistoryLocation)
 
             return
         elif (self.ranMarketCloseMethods):
@@ -231,7 +245,7 @@ class StockTrader:
                 startingBalance=self.balance,
                 interval=self.stockDataInterval,
                 period=self.stockDataPeriod,
-                stopLosePercent=self.stopLossPercent,
+                stopLossPercent=self.stopLossPercent,
                 takeProfitPercent=self.takeProfitPercent,
                 trailingStopPercent=self.trailingStopPercent,
                 startingShares=self.activeTrades
@@ -746,7 +760,12 @@ class StockTrader:
         tradingStatus = {
             "ticker": self.ticker,
             "activeTrades": self.activeTrades,
-            "pendingTrades": self.pendingTrades
+            "pendingTrades": self.pendingTrades,
+            "config": {
+                "stopLossPercent": self.stopLossPercent,
+                "takeProfitPercent": self.takeProfitPercent,
+                "trailingStopPercent": self.trailingStopPercent,
+            }
         }
 
         dirLocation = filepath.rsplit('/', 1)[0]
@@ -776,6 +795,15 @@ class StockTrader:
             self.activeTrades = tradingStatus.get("activeTrades", {})
             self.pendingTrades = tradingStatus.get("pendingTrades", {})
             print(f"Successfully loaded trading state from {filepath}")
+
+            #Overried Config
+            config = tradingStatus.get("config", {})
+
+            if config != {}:
+                print(f"Base Config Override From Loaded State.")
+                self.stopLossPercent = config.get("stopLossPercent", self.stopLossPercent)
+                self.takeProfitPercent = config.get("takeProfitPercent", self.takeProfitPercent)
+                self.trailingStopPercent = config.get("trailingStopPercent", self.trailingStopPercent)
         except Exception as e:
             print(f"Warning: failed to load trading state from {filepath}: {e}\nSome Trades WILL BE LOST!!!!")
             pendingOrders = self.broker.GetAllPendingOrders(self.ticker)

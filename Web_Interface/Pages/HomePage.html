@@ -9,7 +9,7 @@
             <h1 id="Main_Title">Pythona Dashboard</h1>
             <div id="Stock_Grid">
                 <!-- Stock Items will be dynamically inserted here -->
-                {% for key, stock in stocks.items() %}
+                {% for key, stock in data['Stocks'].items() %}
                   <div class="Stock" id="stock-{{ key.split('_')[0]|replace(' ','_')|lower }}">
                     <h1>{{ key.split('_')[0] }}</h1>
                     <h2>Current Trading Strategy: {{ stock['Current Trade Strategy'] }}</h2>
@@ -18,6 +18,14 @@
                                         <a class="detail-btn" href="{{ url_for('stock_detail', ticker=key.split('_')[0]) }}">View Details</a>
                   </div>
                 {% endfor %}
+            </div>
+
+            <div id="User_Info">
+                {% set uname = session.get('username') %}
+                {% set perms = session.get('premissions') %}
+                {% if uname %}
+                <span>{{ uname }}: {{ perms }}</span>
+                {% endif %}
             </div>
         </div>
     </body>

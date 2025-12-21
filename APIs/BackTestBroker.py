@@ -8,16 +8,22 @@ def floor_to_2dp(value):
     return math.floor(value * 100) / 100
 
 class BackTestBroker:
-    def __init__(self, ticker: str, startingBalance: float, period: str, interval: str, stopLosePercent: float, takeProfitPercent: float, 
-                 trailingStopPercent: float, startingShares: dict = {}):
+    def __init__(self, ticker: str, startingBalance: float, period: str, interval: str, stopLossPercent: float, takeProfitPercent: float, 
+                 trailingStopPercent: float, startingShares: dict = {}, backtestGraphs: bool = False, cashedData: pd.DataFrame = None):
         self.ticker = ticker
         self.startingBalance = startingBalance
         self.balance = startingBalance
         self.stockApi = Yahoo()
-        self.stopLossPercent = stopLosePercent
+        self.stopLossPercent = stopLossPercent
         self.takeProfitPercent = takeProfitPercent
         self.trailingStopPercent = trailingStopPercent
-        self.data = self.stockApi.GetStockData(self.ticker, period, interval)
+
+        if cashedData is None:
+            self.data = self.stockApi.GetStockData(self.ticker, period, interval)
+        else:
+            self.data = cashedData
+
+        self.benchmarkGraphs = backtestGraphs
         self.baseTrades = {}
 
         #Convert Starting Shares
@@ -30,8 +36,8 @@ class BackTestBroker:
             }
             negativeIndex += 1
 
-    def RunBackTest(self):
-        bestTradeHistory = []
+    def RunBackTest(self, logResults: bool = True):
+        bestTradeHistory = {}
         becnhmarkResults = {}
         currentBestStrategy = None
         currentBestRoi = -101
@@ -49,6 +55,7 @@ class BackTestBroker:
             
             self.balance = self.startingBalance
             activeTrades = self.baseTrades.copy()
+            tradeHistory = {}
             
             # Loop over ALL data rows to check stop/take profit on every candle
             for i, row in merged_data.iterrows():
@@ -68,27 +75,32 @@ class BackTestBroker:
                         #Get Shares To Sell
                         sharesToSell = floor_to_2dp(order["shares"])
                         self.balance = floor_to_2dp(self.balance + (sharesToSell * current_price))
-
-                        #Check If Graphic Benchmarking Enabled
-                        # if self.benchmarkGraphs:
-                        #     self.AppendTradeHistory(tradeHistory, "stop_loss", price, signals.iloc[i]['Datetime'], sharesToSell)
                         tradesToRemove.append(id)
+
+                        if self.benchmarkGraphs:
+                            tradeHistory[row['Datetime']] = { 
+                                "action": "stop_loss",
+                                "price": current_price,
+                                "shares": sharesToSell
+                            }
 
                     #Check If Trailing Stop Hit (only after 5% profit)
                     elif current_price >= order["price"] * 1.05 and current_price <= order["highest_price"] * (1 - self.trailingStopPercent):
                         sharesToSell = floor_to_2dp(order["shares"])
                         self.balance = floor_to_2dp(self.balance + (sharesToSell * current_price))
-                        # if self.benchmarkGraphs:
-                        #     self.AppendTradeHistory(tradeHistory, "trailing_stop", price, signals.iloc[i]['Datetime'], sharesToSell)
                         tradesToRemove.append(id)
+
+                        if self.benchmarkGraphs:
+                            tradeHistory[row['Datetime']] = { 
+                                "action": "trailing_stop",
+                                "price": current_price,
+                                "shares": sharesToSell
+                            }
 
                     #Check If Take Profit Hit
                     elif current_price >= order["price"] * (1 + self.takeProfitPercent):
                         sharesToSell = floor_to_2dp(order["shares"])
                         self.balance = floor_to_2dp(self.balance + (sharesToSell * current_price))
-                        #Check If Graphic Benchmarking Enabled
-                        # if self.benchmarkGraphs:
-                        #     self.AppendTradeHistory(tradeHistory, "take_profit", price, signals.iloc[i]['Datetime'], sharesToSell)
                         tradesToRemove.append(id)
 
                 #Remove Closed Trades
@@ -97,9 +109,9 @@ class BackTestBroker:
 
                 #Check Signal
                 if signal == 1: #Buy
-                    self.BenchmarkBuy(price=current_price, sharesOwned=sum(trade['shares'] for trade in activeTrades.values()), index=i, strategy=currentBenchmark, activeTrades=activeTrades)
+                    self.BenchmarkBuy(price=current_price, sharesOwned=sum(trade['shares'] for trade in activeTrades.values()), index=i, strategy=currentBenchmark, activeTrades=activeTrades, tradeHistory=tradeHistory, datetime=row['Datetime'])
                 elif signal == -1: #Sell
-                    self.BenchmarkSell(price=current_price, sharesOwned=sum(trade['shares'] for trade in activeTrades.values()), index=i, strategy=currentBenchmark, activeTrades=activeTrades)
+                    self.BenchmarkSell(price=current_price, sharesOwned=sum(trade['shares'] for trade in activeTrades.values()), index=i, strategy=currentBenchmark, activeTrades=activeTrades, tradeHistory=tradeHistory, datetime=row['Datetime'])
 
             #Calculate ROI (use final row price)
             final_price = merged_data.iloc[-1]['Close']
@@ -119,7 +131,7 @@ class BackTestBroker:
 
                 currentBestRoi = roi
                 currentBestStrategy = currentBenchmark
-                bestTradeHistory = None
+                bestTradeHistory = tradeHistory
             else:
                 becnhmarkResults[currentBenchmark.name] = {
                     "End Value": totalValue,
@@ -128,13 +140,14 @@ class BackTestBroker:
                 }
 
         #Print Results
-        print(f"Backtest Results for {self.ticker}:")
-        print(f"{pd.DataFrame(becnhmarkResults).T}")
+        if logResults:
+            print(f"Backtest Results for {self.ticker}:")
+            print(f"{pd.DataFrame(becnhmarkResults).T}")
         #Return Best Strategy And ROI
         return currentBestStrategy, currentBestRoi
                 
 
-    def BenchmarkBuy(self, price: float, index: int, sharesOwned: float, strategy, activeTrades: dict):
+    def BenchmarkBuy(self, price: float, index: int, sharesOwned: float, strategy, activeTrades: dict, tradeHistory: dict, datetime):
         #Check If Benchmark Has Cash
         if self.balance <= 0:
             return False
@@ -158,7 +171,14 @@ class BackTestBroker:
                 "highest_price": price
             }
 
-    def BenchmarkSell(self, price: float, index: int, sharesOwned: float, strategy, activeTrades: dict):
+            if self.benchmarkGraphs:
+                tradeHistory[datetime] = { 
+                    "action": "buy",
+                    "price": price,
+                    "shares": sharesToBuy
+                }
+
+    def BenchmarkSell(self, price: float, index: int, sharesOwned: float, strategy, activeTrades: dict, tradeHistory: dict, datetime):
         #Check If Has Shares To Sell
         if sharesOwned <= 0:
             return False
@@ -189,6 +209,12 @@ class BackTestBroker:
             for trade_index in trades_to_remove:
                 del activeTrades[trade_index]
         
+            if self.benchmarkGraphs:
+                tradeHistory[datetime] = { 
+                    "action": "sell",
+                    "price": price,
+                    "shares": sharesToSell
+                }
 
             
 
