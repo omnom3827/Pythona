@@ -2,7 +2,6 @@ from threading import Thread
 from MultiStockTraderInstance import MultiStockTradeStatus
 from MultiStockTraderHandler import MultiStockTraderHandler
 from Web_Interface.PythonaFlaskWeb import CreateInterface
-from Tools.StockOptimiser import StockOptimiser
 
 instance = MultiStockTradeStatus()
 useWebInterface = True
@@ -29,8 +28,6 @@ if useWebInterface:
     )
 
     multiStockTraderThread.start()
-
-    print("here")
 
     app = CreateInterface(instance)
     app.run(debug=False, port=5000, host='0.0.0.0', use_reloader=False)

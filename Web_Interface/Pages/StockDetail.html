@@ -4,7 +4,7 @@
         <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='StockDetail.css') }}">
     </head>
     <body>
-        <div id="Main_Box">
+        <div id="Main_Box" data-ticker="{{ ticker }}">
             <h1 id="Main_Title">Details for {{ ticker }}</h1>
             <div class="detail-panel">
                 {% if stock %}
@@ -28,51 +28,9 @@
 
                 <!-- Per-stock settings (placeholder for future web editing) -->
                 <section class="settings-panel">
-                    <h3 class="settings-title">Per-stock Settings (beta)</h3>
-
-                    <div class="settings-row">
-                        <label for="takeProfit">Take Profit</label>
-                        <select id="takeProfit" name="takeProfit">
-                            <option value="0.08">8%</option>
-                            <option value="0.10">10%</option>
-                            <option value="0.12">12%</option>
-                            <option value="0.15">15%</option>
-                            <option value="0.20">20%</option>
-                            <option value="0.25">25%</option>
-                        </select>
-                    </div>
-
-                    <div class="settings-row">
-                        <label for="stopLoss">Stop Loss</label>
-                        <select id="stopLoss" name="stopLoss">
-                            <option value="0.05">5%</option>
-                            <option value="0.06">6%</option>
-                            <option value="0.08">8%</option>
-                            <option value="0.10">10%</option>
-                            <option value="0.12">12%</option>
-                        </select>
-                    </div>
-
-                    <div class="settings-row">
-                        <label for="trailingStop">Trailing Stop</label>
-                        <select id="trailingStop" name="trailingStop">
-                            <option value="0.08">8%</option>
-                            <option value="0.10">10%</option>
-                            <option value="0.12">12%</option>
-                            <option value="0.15">15%</option>
-                        </select>
-                    </div>
-
-                    <!-- Reserved placeholders for future per-stock risk settings -->
-                    <div class="settings-row placeholder">
-                        <label>base_risk / min_risk / max_risk</label>
-                        <div class="placeholder-box">(not editable yet)</div>
-                    </div>
-
                     <div class="settings-actions">
                         <button type="button" id="run-optimiser">Run Stock Optimiser</button>
                         <button type="button" id="run-backtest">Run Stock Backtest</button>
-                        <button type="button" id="apply-config">Apply New Config</button>
                         <span id="stock-settings-status" class="settings-status"></span>
                     </div>
                 </section>
@@ -86,79 +44,6 @@
             </div>
         </div>
     
-    <script>
-    (function(){
-        const status = document.getElementById('stock-settings-status');
-        const TICKER = "{{ ticker }}";
-
-        function showStatus(text, flash=false){
-            if(!status) return;
-            status.textContent = text;
-            if(flash) {
-                status.classList.add('flash');
-                setTimeout(()=> status.classList.remove('flash'), 1200);
-            }
-        }
-
-        async function postAction(action, payload){
-            const url = `/stock/${TICKER}/${action}`;
-            try{
-                const res = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload || {})
-                });
-                const data = await res.json();
-                showStatus(data.message || 'OK', true);
-                console.log(action, data);
-            } catch(err){
-                console.error(err);
-                showStatus('Error', true);
-            }
-        }
-
-        // attach change listeners to selects to POST small updates
-        ['takeProfit','stopLoss','trailingStop'].forEach(id => {
-            const el = document.getElementById(id);
-            if(el) el.addEventListener('change', () => {
-                const payload = {
-                    takeProfit: document.getElementById('takeProfit')?.value,
-                    stopLoss: document.getElementById('stopLoss')?.value,
-                    trailingStop: document.getElementById('trailingStop')?.value,
-                    event: 'change'
-                };
-                postAction('optimiser', payload);
-            });
-        });
-
-        document.getElementById('run-optimiser')?.addEventListener('click', () => {
-            const payload = {
-                event: 'run'
-            };
-            postAction('optimiser', payload);
-        });
-
-        document.getElementById('run-backtest')?.addEventListener('click', () => {
-            const payload = {
-                takeProfit: document.getElementById('takeProfit')?.value,
-                stopLoss: document.getElementById('stopLoss')?.value,
-                trailingStop: document.getElementById('trailingStop')?.value,
-                event: 'run'
-            };
-            postAction('backtest', payload);
-        });
-
-        // Apply new config button: persist and attempt to apply immediately
-        document.getElementById('apply-config')?.addEventListener('click', () => {
-            const payload = {
-                takeProfit: document.getElementById('takeProfit')?.value,
-                stopLoss: document.getElementById('stopLoss')?.value,
-                trailingStop: document.getElementById('trailingStop')?.value,
-                event: 'apply'
-            };
-            postAction('apply_config', payload);
-        });
-    })();
-    </script>
+    <script src="{{ url_for('static', filename='StockActions.js') }}"></script>
     </body>
 </html>

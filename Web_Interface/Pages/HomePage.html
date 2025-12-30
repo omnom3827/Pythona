@@ -10,12 +10,12 @@
             <div id="Stock_Grid">
                 <!-- Stock Items will be dynamically inserted here -->
                 {% for key, stock in data['Stocks'].items() %}
-                  <div class="Stock" id="stock-{{ key.split('_')[0]|replace(' ','_')|lower }}">
+                  <div class="Stock" id="stock-{{ key }}">
                     <h1>{{ key.split('_')[0] }}</h1>
                     <h2>Current Trading Strategy: {{ stock['Current Trade Strategy'] }}</h2>
                     <h2>ROI Estimate: {{ stock['Estimated ROI'] }}</h2>
                     <h2>Cash: {{ stock['Cash'] }}</h2>
-                                        <a class="detail-btn" href="{{ url_for('stock_detail', ticker=key.split('_')[0]) }}">View Details</a>
+                        <a class="detail-btn" href="{{ url_for('stock_detail', ticker=key) }}">View Details</a>
                   </div>
                 {% endfor %}
             </div>

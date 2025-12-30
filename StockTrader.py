@@ -55,7 +55,6 @@ class StockTrader:
         self.LoadStateFromFile(self.tradingHistoryLocation)
 
     def TradingUpdateLoop(self):
-            
         #Check current pending trades for fills
         orders_to_remove = []
         
@@ -106,16 +105,7 @@ class StockTrader:
 
             #Is It A Weekend
             if(self.weekendsSinceLastReconfig >= self.weekendsToWaitBeforeReconfig and datetime.now().weekday() >=5):
-                print("Running Main Stock Optimisation. This Will Take A While")
-                bestConfig = StockOptimiser(tickers=[self.ticker.split("_")[0]], initial_balance=self.balance, period="1y", interval="1h", stockDataApi=self.stockApi).RunOptimisation(loggingLevel=1, runtimeHistoryLimit=5)
-
-                #Update Settings With New Best Config
-                self.stopLossPercent = bestConfig[self.ticker.split("_")[0]]["params"]["stopLossPercent"]
-                self.takeProfitPercent = bestConfig[self.ticker.split("_")[0]]["params"]["takeProfitPercent"]
-                self.trailingStopPercent = bestConfig[self.ticker.split("_")[0]]["params"]["trailingStopPercent"]
-                self.becnhmarkRoi = bestConfig[self.ticker.split("_")[0]]["roi"]
-                self.strategy = bestConfig[self.ticker.split("_")[0]]["tradingMethod"]
-                print(f"Updated Trading Parameters For {self.ticker}:\nStop Loss: {self.stopLossPercent}\nTake Profit: {self.takeProfitPercent}\nTrailing Stop: {self.trailingStopPercent}\nEstimated ROI: {self.becnhmarkRoi*100:.2f}%\nStrategy: {bestConfig[self.ticker.split('_')[0]]['tradingMethod'].name}")
+                self.OptimizeTradingParameters()
                 self.weekendsSinceLastReconfig = 0
             #Update Trading Stratgey While Market Is Closed
             elif (self.ranMarketCloseMethods == False):
@@ -255,7 +245,6 @@ class StockTrader:
 
             self.becnhmarkRoi = roi
             self.strategy = strategy
-            print("Used New Strategy Update Method.")
             return
         
         print("THIS METHOD HAS BEEN SUPERSEDED BY A NEW METHOD AND WILL BE REMOVED IN FUTURE VERSIONS."
@@ -591,6 +580,18 @@ class StockTrader:
             activeTrades = new_active
         
         return activeTrades, cash
+    
+    def OptimizeTradingParameters(self):
+        print("Running Main Stock Optimisation. This Will Take A While")
+        bestConfig = StockOptimiser(tickers=[self.ticker.split("_")[0]], initial_balance=self.balance, period="1y", interval="1h", stockDataApi=self.stockApi).RunOptimisation(loggingLevel=1, runtimeHistoryLimit=5)
+
+        #Update Settings With New Best Config
+        self.stopLossPercent = bestConfig[self.ticker.split("_")[0]]["params"]["stopLossPercent"]
+        self.takeProfitPercent = bestConfig[self.ticker.split("_")[0]]["params"]["takeProfitPercent"]
+        self.trailingStopPercent = bestConfig[self.ticker.split("_")[0]]["params"]["trailingStopPercent"]
+        self.becnhmarkRoi = bestConfig[self.ticker.split("_")[0]]["roi"]
+        self.strategy = bestConfig[self.ticker.split("_")[0]]["tradingMethod"]
+        print(f"Updated Trading Parameters For {self.ticker}:\nStop Loss: {self.stopLossPercent}\nTake Profit: {self.takeProfitPercent}\nTrailing Stop: {self.trailingStopPercent}\nEstimated ROI: {self.becnhmarkRoi*100:.2f}%\nStrategy: {bestConfig[self.ticker.split('_')[0]]['tradingMethod'].name}")
 
     def GraphTradeHistory(self, tradeHistory, strategyName = "NULL"):
         if not tradeHistory or len(tradeHistory) == 0:

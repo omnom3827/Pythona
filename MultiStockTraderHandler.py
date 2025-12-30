@@ -5,10 +5,9 @@ from datetime import datetime
 from MultiStockTraderInstance import MultiStockTradeStatus
 import pandas as pd
 import time
-from functools import wraps
 
 class MultiStockTraderHandler:
-    def __init__(self, stockTickers: list[str], minBalancePerTrader: float = 100.0, safteyBalancePercent: float = -1.0, exchangeTimesUpdateIntervalSeconds: int = 86400, tradingLoopWaitSeconds: int = 3600, stockDataInterval: str = "1h", stockDataPeriod: str = "1y",
+    def __init__(self, stockTickers: list[str], safteyBalancePercent: float = -1.0, exchangeTimesUpdateIntervalSeconds: int = 86400, tradingLoopWaitSeconds: int = 3600, stockDataInterval: str = "1h", stockDataPeriod: str = "1y",
                  instance: MultiStockTradeStatus = None):
         self.tradingState = instance
         self.stockTraders = {}
@@ -21,14 +20,14 @@ class MultiStockTraderHandler:
         )
 
         if self.tradingState is not None:
-            self.tradingState.Update(
+            self.tradingState.UpdateData(
                 CurrentBroker=self.broker.name
             )
 
-        self.balance = 0.0
+        #Get Initial Balance
         self.safteyBalancePercent = safteyBalancePercent
-
-        self.RefreshBalances()
+        self.RefreshBalances(updateTraders=False)
+        balancePerTrader = self.runTimeStartBalance / len(stockTickers)
 
         self.exchangeTimes = self.ThisWeekExchangeHours()
         self.timeSinceLastExchangeUpdate = 0
@@ -40,17 +39,13 @@ class MultiStockTraderHandler:
             print("Error: Has Not Received Any Exchange Hours. Trading Cannot Occur. Another Update Attempt Will Be Made In 30 Minutes.")
             self.timeSinceLastExchangeUpdate = self.exchangeTimesUpdateIntervalSeconds - 1800  # Next Update In 30 Minutes
 
-        #Split The Balance Equally Between All Traders
-        balancePerTrader = self.runTimeStartBalance / len(stockTickers)
-
-        if balancePerTrader < minBalancePerTrader:
-            print(f"Warning: Each Trader Will Only Have ${balancePerTrader:.2f}. Which Is Below Your Set Minimum Of ${minBalancePerTrader:.2f} Per Trader.\nThis May Result In Failed Orders Due To Insufficient Funds. Please Monitor.")
-        
         # Initialize a StockTrader instance for each ticker
         for ticker in stockTickers:
             self.stockTraders[ticker] = StockTrader(ticker=ticker, balance=balancePerTrader, benchmarkGraphs=False, broker=self.broker, 
                                                     stockMultiHandler=self, stockDataInterval=stockDataInterval, stockDataPeriod=stockDataPeriod, 
                                                     marketToTradeIn=self.GetExchangeFromTicker(ticker), stocksApi=self.stockApi)
+
+
     def RunUpdateLoop(self):
         while True:
             print(f"MultiStockTraderHandler Update Loop Running At {datetime.now().isoformat()}")
@@ -66,23 +61,47 @@ class MultiStockTraderHandler:
                 print("Trading Loop Result:")
                 print(pd.DataFrame(self.traderRunHistory).T)
             else:
-                self.tradingState.Update(
+                self.tradingState.UpdateData(
                     LastUpdate=datetime.now().isoformat(),
                     Stocks = self.traderRunHistory
                 )
 
-            time.sleep(self.tradingLoopWaitSeconds)  # Wait for specified seconds before the next update loop
-            self.timeSinceLastExchangeUpdate += self.tradingLoopWaitSeconds
+            timeWaited = 0
+            while timeWaited < self.tradingLoopWaitSeconds:
+                #Check For Special Instructions
+                if self.tradingState is not None:
+                    specialInstructions = self.tradingState.GetAllInstructions()
 
+                    # Loop Through Each Ticker's Instructions
+                    for ticker in specialInstructions:
+                        if specialInstructions[ticker].get("backtest_requested", False):
+                            print(f"Backtest Requested For {ticker}. Running Backtest")
+                            self.stockTraders[ticker].UpdateStrategy()
+
+                        if specialInstructions[ticker].get("optimiser_requested", False):
+                            print(f"Optimiser Requested For {ticker}. Running Optimiser")
+                            self.stockTraders[ticker].OptimizeTradingParameters()
+
+                        if specialInstructions[ticker].get("config_updates", None) is not None:
+                            print(f"Config Update Requested For {ticker}. Applying Config Updates: {specialInstructions[ticker]['config_updates']}")
+
+                        self.tradingState.ClearStockInstructions(ticker)
+
+                    
+                time.sleep(1)
+                timeWaited += 1
+                self.timeSinceLastExchangeUpdate += 1
+                
             #Check If Exchange Hours Need Updated
             if self.timeSinceLastExchangeUpdate >= self.exchangeTimesUpdateIntervalSeconds:
                 print("Updating Exchange Hours...")
                 self.UpdateExchangeHours()
-                self.RefreshBalances()
+                self.RefreshBalances(updateTraders=True)
 
-                #Update Each Trader's Balance
-                for trader in self.stockTraders.values():
-                    trader.UpdateBalance(trader.balance + (self.runTimeStartBalance / len(self.stockTraders)) )
+            if timeWaited >= self.tradingLoopWaitSeconds:
+                print("here")
+                # All Special Instructions Should Have Been Processed By Now
+                self.tradingState.StockInstructionsRan()
 
     def ThisWeekExchangeHours(self):
         exhangeHours = self.broker.GetExchangeHours()
@@ -144,8 +163,8 @@ class MultiStockTraderHandler:
 
         return isOpen
     
-    def RefreshBalances(self):
-        self.balance = self.broker.GetAccountBalance()
+    def RefreshBalances(self, updateTraders: bool):
+        self.balance = self.broker.GetAccountBalance(betaNetDepositTest=True)
 
         if self.balance is None:
             print("Error: Could Not Retrieve Account Balance. Cannot Start Traders.")
@@ -168,3 +187,11 @@ class MultiStockTraderHandler:
         if self.runTimeStartBalance <= 0:
             print(f"Error: Saftey Balance Of ${self.safteyBalance:.2f} Is More Than Or Equal To Total Balance Of $1000.00. Cannot Start Traders.")
             quit()
+
+        if updateTraders:
+            #Split The Balance Equally Between All Traders
+            balancePerTrader = self.runTimeStartBalance / len(self.stockTraders)
+
+            # Update Each Trader's Balance
+            for trader in self.stockTraders.values():
+                trader.UpdateBalance(balancePerTrader)

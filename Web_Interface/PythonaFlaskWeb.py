@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for, request, session
+from flask import Flask, render_template, redirect, url_for, request, session, jsonify
 from MultiStockTraderInstance import MultiStockTradeStatus
 from time import time
 import dotenv
@@ -129,7 +129,7 @@ def CreateInterface(state: MultiStockTradeStatus) -> Flask:
             session['login_expires'] = expires
             app.active_logins[session['username']] = expires
 
-        data = state.Snapshot()
+        data = state.SnapshotData()
         return render_template('HomePage.html', data=data)
 
     @app.route('/dashboard/stock/<ticker>')
@@ -137,34 +137,32 @@ def CreateInterface(state: MultiStockTradeStatus) -> Flask:
         if(session.get('username') is None):
             return redirect(url_for('home'))
 
-        data = state.Snapshot()
+        data = state.SnapshotData()
         stocks = data.get('Stocks', {}) if data else {}
         selected = None
         for key, val in stocks.items():
-            if key.split('_')[0].lower() == ticker.lower():
+            if key.lower() == ticker.lower():
                 selected = (key, val)
                 break
         if selected is None:
             return render_template('StockDetail.html', ticker=ticker, stock=None)
         # pass the ticker (readable) and the stock dictionary
-        return render_template('StockDetail.html', ticker=selected[0].split('_')[0], stock=selected[1])
-
+        return render_template('StockDetail.html', ticker=selected[0], stock=selected[1])
     @app.route('/stock/<ticker>/optimiser', methods=['POST'])
     def stock_optimiser(ticker):
         print(f"Stock optimiser requested for {ticker}")
         # TODO: hook into StockOptimiser / backtester
-        return redirect(url_for('stock_detail', ticker=ticker))
+        state.UpdateStockInstructions(ticker, {"optimiser_requested": True})
+
+        return jsonify(message='optimiser started'), 200
 
     @app.route('/stock/<ticker>/backtest', methods=['POST'])
     def stock_backtest(ticker):
-        try:
-            payload = request.get_json() or {}
-        except Exception:
-            payload = {}
+        print(f"Stock Backtest Requested For {ticker}")
 
-        print(f"Stock backtest requested for {ticker}: {payload}")
-        # TODO: trigger a backtest job
-        return redirect(url_for('stock_detail', ticker=ticker))
+        state.UpdateStockInstructions(ticker, {"backtest_requested": True})
+
+        return jsonify(message='backtest started'), 200
 
     @app.route('/stock/<ticker>/apply_config', methods=['POST'])
     def stock_apply_config(ticker):
@@ -175,7 +173,9 @@ def CreateInterface(state: MultiStockTradeStatus) -> Flask:
 
         print(f"Apply config requested for {ticker}: {payload}")
 
-        return redirect(url_for('stock_detail', ticker=ticker))
+        state.UpdateStockInstructions(ticker, {"config_updates": payload})
+
+        return jsonify(message='config update applied'), 200
 
     return app
 
@@ -229,8 +229,7 @@ def CheckLoginCredentials(username: str, password: str) -> bool:
     except Exception as e:
         print(f"Failed To Load Credentials File: {e}")
         return False
-    
-    print(credentials)
+
     # Check username
     if credentials.get(username, None) is None:
         print(f"{username} Not Found In Credentials File")

@@ -245,7 +245,7 @@ class Trading212Broker:
             print(f"GetExchangeHours Failed: {e}")
             return None
         
-    def GetAccountBalance(self):
+    def GetAccountBalance(self, betaNetDepositTest: bool):
         if(self.authTestResult == False):
             print("Cannot Get Account Balance: Authentication Test Failed.")
             return None
@@ -267,8 +267,14 @@ class Trading212Broker:
                 print(f"GetAccountBalance HTTP {result.status_code}: {snippet}")
                 return None
 
+
             result = result.json()
-            return result.get("cash").get("availableToTrade") + result.get("cash").get("reservedForOrders")
+            print(result)
+
+            if betaNetDepositTest:
+                return result.get("cash").get("availableToTrade") + result.get("investments").get("totalCost")
+            else:
+                return result.get("cash").get("availableToTrade") + result.get("cash").get("reservedForOrders")
         except Exception as e:
             print(f"GetAccountBalance Failed: {e}")
             return None
