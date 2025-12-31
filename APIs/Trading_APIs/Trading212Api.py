@@ -109,7 +109,19 @@ class Trading212Broker:
                     "order_id": result.get("id")
                 }
             else:
-                print("Order Not Filled Immediately.")
+                print("Order Not Filled Immediately. Adding To Order Book.")
+
+                #Check If Ticker Exists In Local Order Book
+                if ticker not in self.localOrderBook.keys():
+                    self.localOrderBook[ticker] = {
+                        "orders": {}
+                    }
+
+                self.localOrderBook[ticker]["orders"][result.get("id")] = { 
+                    "status": "PENDING",
+                    "type": "UNKNOWN"
+                }
+
                 return {
                     "success": True,
                     "filled": False,
@@ -133,10 +145,10 @@ class Trading212Broker:
 
         if newMethod:
             # Update Order Book If Outdated (30 Minutes) TODO: Make This Time Configurable
-            if ticker not in self.localOrderBook.keys() or (datetime.now() - self.localOrderBook[ticker]["last_updated"]).total_seconds() >= 1800:
+            if ticker not in self.localOrderBook.keys() or self.localOrderBook[ticker].get("last_updated") is None or (datetime.now() - self.localOrderBook[ticker]["last_updated"]).total_seconds() >= 1800:
                 print("Order Book Outdated Or Not Found. Updating Local Order Book.")
 
-                updatedOrderBook = self.UpdateLocalOrderBook(ticker)
+                updatedOrderBook = self.GetAllClosedOrders(ticker)
 
                 if updatedOrderBook is not None:
                     self.localOrderBook[ticker] = {
@@ -170,17 +182,7 @@ class Trading212Broker:
                     }
             else:
                 print(f"Order ID: {order} Not Found In Local Order Book. Possibly Still Pending.")
-                pendingCheckResults = self.CheckIfPendingOrder(order)
-
-                #If Order Is Still Pending, Add It To Local Order Book
-                if pendingCheckResults.get("success") and pendingCheckResults.get("status") != "CANCELLED":
-                    if self.localOrderBook[ticker]["orders"].get(order, None) is None:
-                        self.localOrderBook[ticker]["orders"][order] = {
-                            "status": pendingCheckResults.get("status"),
-                            "type": "UNKNOWN"
-                        }
-
-                return pendingCheckResults
+                return self.CheckIfPendingOrder(order)
         else:
             return self.CheckIfPendingOrder(order)
 
@@ -388,7 +390,7 @@ class Trading212Broker:
 # TRADING 212 EXCLUSIVE METHODS ARE BELOW
 
     # TRADING 212 EXCLUSIVE METHOD
-    def UpdateLocalOrderBook(self, ticker: str):
+    def GetAllClosedOrders(self, ticker: str):
         if(self.authTestResult == False):
             print("Cannot Get Open Positions: Authentication Test Failed.")
             return None
@@ -420,10 +422,21 @@ class Trading212Broker:
             result = result.json()
             allOrders = {}
 
+            #Existing Pending Orders
+            if ticker in self.localOrderBook.keys():
+                for orderId, orderData in self.localOrderBook[ticker]["orders"].items():
+                    if orderData.get("status") == "PENDING":
+                        print(f"Pending Order Found. Preserving ID: {orderId}")
+                        allOrders[orderId] = orderData
+
             for order in result.get("items"):
                 orderData = order.get("order")
 
                 if(orderData.get("status") != "CANCELLED"):
+                    #Check If Order Was Pending Previously
+                    if allOrders.get(orderData.get("id"), None) is not None:
+                        print(f"Previously Pending Order Now Filled. ID: {orderData.get('id')}")
+                    
                     allOrders[order.get("order").get("id")] = {
                         "status": orderData.get("status"),
                         "type": orderData.get("side")

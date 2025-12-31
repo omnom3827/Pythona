@@ -55,13 +55,14 @@ class StockTrader:
 
         #Load Previous Trading History If Exists
         self.LoadStateFromFile(self.tradingHistoryLocation)
-
+        
     def TradingUpdateLoop(self):
         #Check current pending trades for fills
         orders_to_remove = []
         
         for order_id, pending_order in list(self.pendingTrades.items()):
             order_info = self.broker.CheckOrderStatus(order_id, newMethod=True, ticker=self.ticker)
+            print(f"Checking Status For Pending Order #{order_id}")
 
             if order_info.get("filled"):
                 # Move from pending to active (only for BUY orders - sells close positions)
