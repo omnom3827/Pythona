@@ -324,8 +324,6 @@ class Trading212Broker:
 
             result = result.json()
 
-            print(result)
-            
             return {
                 "id": 0,
                 "shares": result[0].get("quantityAvailableForTrading"),
@@ -361,17 +359,14 @@ class Trading212Broker:
 
             allOrders = {}
 
-            print(json_result)
-
             for order in json_result:     
                 if(ticker is not None and ticker != order.get("instrument").get("ticker")):
                     continue
 
                 allOrders[order.get("id")] = {
-                    "success": True,
+                    "type": order.get("side"),
                     "ticker": order.get("instrument").get("ticker"),
-                    "filled": False,
-                    "type": order.get("type"),
+                    "shares": order.get("quantity")
                 }
 
             return allOrders

@@ -667,9 +667,17 @@ class StockTrader:
                 "price": openPosition.get("price"),
             }
 
-        for order in pendingOrders:
+        for orderId in pendingOrders:
+            order = pendingOrders[orderId]
+
             if order.get("type") == "BUY":
-                print("TODO: Rebuild Pending Buy Orders From Broker Data - Currently Not Supported.")
+                print(order)
+                self.pendingTrades[orderId] = {
+                    "type": "BUY",
+                    "ticker": order.get("ticker"),
+                    "shares": order.get("shares"),
+                    "price": floor_to_2dp(self.signals.iloc[-1]['Close'] + 2),  # Approximate Price As Order Is Still Pending
+                }
             else:
                 print("TODO: Rebuild Pending Sell Orders From Broker Data - Currently Not Supported.")
 

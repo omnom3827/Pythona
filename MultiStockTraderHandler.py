@@ -7,7 +7,7 @@ import pandas as pd
 import time
 
 class MultiStockTraderHandler:
-    def __init__(self, stockTickers: list[str], safteyBalancePercent: float = -1.0, exchangeTimesUpdateIntervalSeconds: int = 86400, tradingLoopWaitSeconds: int = 60, stockDataInterval: str = "1h", stockDataPeriod: str = "1y",
+    def __init__(self, stockTickers: list[str], safteyBalancePercent: float = -1.0, exchangeTimesUpdateIntervalSeconds: int = 86400, tradingLoopWaitSeconds: int = 600, stockDataInterval: str = "1h", stockDataPeriod: str = "1y",
                  instance: MultiStockTradeStatus = None):
         self.tradingState = instance
         self.stockTraders = {}
