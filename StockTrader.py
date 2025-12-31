@@ -56,8 +56,6 @@ class StockTrader:
         #Load Previous Trading History If Exists
         self.LoadStateFromFile(self.tradingHistoryLocation)
 
-        self.BuyApi(self.balance, self.signals.iloc[-1]['Close'])
-
     def TradingUpdateLoop(self):
         #Check current pending trades for fills
         orders_to_remove = []
