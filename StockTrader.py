@@ -55,7 +55,7 @@ class StockTrader:
 
         #Load Previous Trading History If Exists
         self.LoadStateFromFile(self.tradingHistoryLocation)
-        
+
     def TradingUpdateLoop(self):
         #Check current pending trades for fills
         orders_to_remove = []
@@ -626,7 +626,8 @@ class StockTrader:
 
     def LoadStateFromFile(self, filepath: str):
         if not os.path.exists(filepath):
-            print(f"Previous State File Not Found: {filepath}")
+            print(f"Previous State File Not Found: {filepath}. Building State From Broker Data.")
+            self.BuildStateFromBroker()
             return
         
         try:
@@ -652,20 +653,24 @@ class StockTrader:
                 self.trailingStopPercent = config.get("trailingStopPercent", self.trailingStopPercent)
         except Exception as e:
             print(f"Warning: failed to load trading state from {filepath}: {e}\nSome Trades WILL BE LOST!!!!")
-            pendingOrders = self.broker.GetAllPendingOrders(self.ticker)
-            openPosition = self.broker.GetOpenPositions(self.ticker)
+            self.BuildStateFromBroker()
 
-            if openPosition is not None:
-                self.activeTrades[openPosition.get("id")] = {
-                    "ticker": self.ticker,
-                    "shares": openPosition.get("shares"),
-                    "price": openPosition.get("price"),
-                }
 
-            for order in pendingOrders:
-                if order.get("type") == "BUY":
-                    print("TODO: Rebuild Pending Buy Orders From Broker Data - Currently Not Supported.")
-                else:
-                    print("TODO: Rebuild Pending Sell Orders From Broker Data - Currently Not Supported.")
+    def BuildStateFromBroker(self):
+        pendingOrders = self.broker.GetAllPendingOrders(self.ticker)
+        openPosition = self.broker.GetOpenPositions(self.ticker)
 
-            print("We Are Working To Add Support To Load From Trading212.")
+        if openPosition is not None:
+            self.activeTrades[openPosition.get("id")] = {
+                "ticker": self.ticker,
+                "shares": openPosition.get("shares"),
+                "price": openPosition.get("price"),
+            }
+
+        for order in pendingOrders:
+            if order.get("type") == "BUY":
+                print("TODO: Rebuild Pending Buy Orders From Broker Data - Currently Not Supported.")
+            else:
+                print("TODO: Rebuild Pending Sell Orders From Broker Data - Currently Not Supported.")
+
+        print("We Are Working To Add Support To Load From Trading212.")
