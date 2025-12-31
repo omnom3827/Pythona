@@ -24,6 +24,7 @@ class StockTrader:
             print(f"Cannot Start Instance For Ticker: {ticker}: Missing Required Components.")
             return
         
+        
         self.tradingHistoryLocation = f"./TradingHistory/{ticker}_trading_history.json"
         self.stockApi = stocksApi
         self.benchmarkGraphs = benchmarkGraphs
@@ -51,15 +52,18 @@ class StockTrader:
 
         self.broker = broker
 
+
         #Load Previous Trading History If Exists
         self.LoadStateFromFile(self.tradingHistoryLocation)
+
+        self.BuyApi(self.balance, self.signals.iloc[-1]['Close'])
 
     def TradingUpdateLoop(self):
         #Check current pending trades for fills
         orders_to_remove = []
         
         for order_id, pending_order in list(self.pendingTrades.items()):
-            order_info = self.broker.CheckOrderStatus(order_id)
+            order_info = self.broker.CheckOrderStatus(order_id, newMethod=True, ticker=self.ticker)
 
             if order_info.get("filled"):
                 # Move from pending to active (only for BUY orders - sells close positions)
@@ -85,6 +89,7 @@ class StockTrader:
                         print(f"Warning: Affected Position #{pending_order['affectedId']} Not Found For Filled SELL Order #{order_id}.")
                 
                 orders_to_remove.append(order_id)
+                print(f"Order #{order_id} Was Filled.")
             elif order_info.get("status") == "CANCELLED":
                 print(f"Order #{order_id} Was Cancelled.")
                 orders_to_remove.append(order_id)
@@ -97,9 +102,8 @@ class StockTrader:
         
         #Check if Exchange is Open
         if(self.stockMultiHandler.IsExchangeOpen(self.marketToTradeIn, datetime.now(timezone.utc)) == False):
-            print("Market Closed. Waiting For Open...")
 
-            total_invested = sum(t["shares"] * latest_price for t in self.activeTrades.values())
+            total_invested = sum(t["shares"] * self.signals.iloc[-1]['Close'] for t in self.activeTrades.values())
             pending_total = sum(t["shares"] * t["price"] for t in self.pendingTrades.values())
             total_value = self.balance + total_invested
 
@@ -401,6 +405,7 @@ class StockTrader:
                         "shares": floor_to_2dp(shares),
                         "price": floor_to_2dp(price + 2),
                     }
+                    print(f"Buy Order Pending. Order Id: {order_id}")
                 else:
                     order_id = result.get("order_id")
                     self.activeTrades[order_id] = {
@@ -593,175 +598,12 @@ class StockTrader:
         self.strategy = bestConfig[self.ticker.split("_")[0]]["tradingMethod"]
         print(f"Updated Trading Parameters For {self.ticker}:\nStop Loss: {self.stopLossPercent}\nTake Profit: {self.takeProfitPercent}\nTrailing Stop: {self.trailingStopPercent}\nEstimated ROI: {self.becnhmarkRoi*100:.2f}%\nStrategy: {bestConfig[self.ticker.split('_')[0]]['tradingMethod'].name}")
 
-    def GraphTradeHistory(self, tradeHistory, strategyName = "NULL"):
-        if not tradeHistory or len(tradeHistory) == 0:
-            print("No trade history to plot.")
-            return
-
-        # Use datetime for x-axis (it always exists in self.data)
-        df = self.data.copy()
-        df['Datetime'] = pd.to_datetime(df['Datetime'])
-        df = df.set_index('Datetime')
-        n = len(df)
-        times = df.index
-        price_arr = df['Close'].values
-
-        # Map trades by datetime
-        trade_map = {}
-        for t in tradeHistory:
-            dt = t.get('datetime')
-            if dt is None:
-                continue
-            dt = pd.to_datetime(dt)
-            # Find nearest time in index
-            idx_array = times.get_indexer([dt], method='nearest')
-            if len(idx_array) == 0:
-                continue
-            idx = idx_array[0]
-            if idx == -1:
-                continue
-            trade_map.setdefault(idx, []).append(t)
-
-        # Reconstruct portfolio over time from trades
-        starting_balance = getattr(self, 'balance', 0)
-        cash = starting_balance
-        shares = 0
-        cash_hist = []
-        invested_hist = []
-        total_hist = []
-
-        # iterate over price bars
-        for i, (ts, row) in enumerate(df.iterrows()):
-            trades_here = trade_map.get(i, [])
-            for tr in trades_here:
-                typ = (tr.get('type') or '').lower()
-                price = tr.get('price')
-                t_shares = tr.get('shares', None)
-                
-                if typ == 'buy':
-                    if t_shares is None or t_shares <= 0:
-                        t_shares = 1  # Fallback for old trade history
-                    cost = price * t_shares
-                    # Prevent negative cash
-                    if cost > cash:
-                        print(f"WARNING: Buy at {ts} would overdraw cash. Adjusting.")
-                        t_shares = cash / price if price > 0 else 0
-                        cost = t_shares * price
-                    cash -= cost
-                    shares += t_shares
-                elif typ == 'sell':
-                    if t_shares is None:
-                        t_shares = shares  # Sell all if not specified
-                    t_shares = min(t_shares, shares)  # Can't sell more than owned
-                    cash += price * t_shares
-                    shares = max(0, shares - t_shares)
-                elif typ in ('stop_loss', 'stop'):
-                    if t_shares is None:
-                        t_shares = shares  # Use all shares if not specified
-                    t_shares = min(t_shares, shares)  # Can't sell more than owned
-                    if t_shares > 0:
-                        cash += price * t_shares
-                        shares = max(0, shares - t_shares)
-                elif typ in ('trailing_stop', 'trailing'):
-                    if t_shares is None:
-                        t_shares = shares  # Use all shares if not specified
-                    t_shares = min(t_shares, shares)  # Can't sell more than owned
-                    if t_shares > 0:
-                        cash += price * t_shares
-                        shares = max(0, shares - t_shares)
-                elif typ in ('take_profit', 'tp'):
-                    if t_shares is None:
-                        t_shares = shares  # Use all shares if not specified
-                    t_shares = min(t_shares, shares)  # Can't sell more than owned
-                    if t_shares > 0:
-                        cash += price * t_shares
-                        shares = max(0, shares - t_shares)
-            
-            # Ensure cash never goes negative (failsafe)
-            cash = max(0, cash)
-
-            position_value = shares * row['Close']
-            invested_hist.append(position_value)
-            cash_hist.append(cash)
-            total_hist.append(cash + position_value)
-
-        # Create plots: top = price + markers, bottom = portfolio stacked
-        fig, (ax_price, ax_port) = plt.subplots(2, 1, figsize=(14, 10), sharex=True,
-                            gridspec_kw={'height_ratios': [2, 1]})
-
-        # Price plot (x axis is datetime)
-        ax_price.plot(times, price_arr, color='#073B4C', linewidth=1.5, label='Close')
-
-        # Prepare marker lists from trade_map
-        buys_x, buys_y = [], []
-        sells_x, sells_y = [], []
-        stops_x, stops_y = [], []
-        trailing_x, trailing_y = [], []
-        tps_x, tps_y = [], []
-        for idx, trades in trade_map.items():
-            trade_time = times[idx]
-            for tr in trades:
-                typ = (tr.get('type') or '').lower()
-                # Use the actual trade price recorded in the trade
-                plot_price = tr.get('price', price_arr[idx])
-                if typ == 'buy':
-                    buys_x.append(trade_time); buys_y.append(plot_price)
-                elif typ == 'sell':
-                    sells_x.append(trade_time); sells_y.append(plot_price)
-                elif typ in ('stop_loss', 'stop'):
-                    stops_x.append(trade_time); stops_y.append(plot_price)
-                elif typ in ('trailing_stop', 'trailing'):
-                    trailing_x.append(trade_time); trailing_y.append(plot_price)
-                elif typ in ('take_profit', 'tp'):
-                    tps_x.append(trade_time); tps_y.append(plot_price)
-
-        if buys_x:
-            ax_price.scatter(buys_x, buys_y, marker='^', color='#06D6A0', edgecolors='black', s=60, label='Buy', zorder=6)
-        if sells_x:
-            ax_price.scatter(sells_x, sells_y, marker='v', color='#EF476F', edgecolors='black', s=60, label='Sell', zorder=6)
-        if stops_x:
-            ax_price.scatter(stops_x, stops_y, marker='x', color='black', s=50, label='Stop Loss', zorder=6)
-        if trailing_x:
-            ax_price.scatter(trailing_x, trailing_y, marker='s', color='#FFD166', edgecolors='black', s=50, label='Trailing Stop', zorder=6)
-        if tps_x:
-            ax_price.scatter(tps_x, tps_y, marker='o', color='#118AB2', s=50, label='Take Profit', zorder=6)
-
-        ax_price.set_ylabel('Price')
-        ax_price.set_title(f'{self.ticker} Price and Trades')
-        ax_price.legend(loc='best')
-        ax_price.grid(alpha=0.3)
-
-        # Portfolio plot: stacked area of cash and invested
-        cash_arr = pd.Series(cash_hist, index=times)
-        invested_arr = pd.Series(invested_hist, index=times)
-        total_arr = pd.Series(total_hist, index=times)
-
-        ax_port.plot(times, total_arr, color='#073B4C', linewidth=2, label='Total Portfolio')
-        ax_port.fill_between(times, 0, cash_arr, color='#90C2E7', alpha=0.6, label='Cash')
-        ax_port.fill_between(times, cash_arr, cash_arr + invested_arr, color='#06D6A0', alpha=0.6, label='Invested')
-
-        ax_port.set_ylabel('Portfolio Value')
-        ax_port.set_xlabel('Datetime')
-        ax_port.legend(loc='best')
-        ax_port.grid(alpha=0.3)
-
-        plt.tight_layout()
-        try:
-            # Ensure output directory exists (use ticker as folder)
-            out_dir = f"Trading_Graphs/{self.ticker}"
-            if out_dir and not os.path.exists(out_dir):
-                os.makedirs(out_dir, exist_ok=True)
-            filename = f"{out_dir}/Trade_History_{strategyName}.png"
-            plt.savefig(filename, dpi=150, bbox_inches='tight')
-            print(f"Saved trade history to {filename}")
-        except Exception as e:
-            print(f"Warning: failed to save trade history: {e}")
-
     def SaveStateToFile(self, filepath: str):
         tradingStatus = {
             "ticker": self.ticker,
-            "activeTrades": self.activeTrades,
-            "pendingTrades": self.pendingTrades,
+            # stringify keys so JSON can always serialize (handles numpy.int64)
+            "activeTrades": {k: v for k, v in self.activeTrades.items()},
+            "pendingTrades": {k: v for k, v in self.pendingTrades.items()},
             "config": {
                 "stopLossPercent": self.stopLossPercent,
                 "takeProfitPercent": self.takeProfitPercent,
@@ -793,8 +635,12 @@ class StockTrader:
                 tradingStatus = json.load(f)
             
             self.ticker = tradingStatus.get("ticker", self.ticker)
-            self.activeTrades = tradingStatus.get("activeTrades", {})
-            self.pendingTrades = tradingStatus.get("pendingTrades", {})
+            activeTrades = tradingStatus.get("activeTrades", {})
+            pendingTrades = tradingStatus.get("pendingTrades", {})
+
+            self.activeTrades = { int(k): v for k, v in activeTrades.items() }
+            self.pendingTrades = { int(k): v for k, v in pendingTrades.items() }
+
             print(f"Successfully loaded trading state from {filepath}")
 
             #Overried Config

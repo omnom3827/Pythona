@@ -1,4 +1,4 @@
-import time
+from time import sleep
 from datetime import datetime
 import requests
 from requests.auth import HTTPBasicAuth
@@ -27,6 +27,9 @@ class Trading212Broker:
             self.base_url = "https://live.trading212.com/api/v0"
 
         self.authTestResult = self.Authenticate_Test()
+
+        # Trading212 EXLUSIVE ORDER BOOK STORAGE LOCALLY. THIS IS BECAUSE TRADING 212'S API DOES NOT ALL YOU TO CHECK THE STATUS OF ANY FILLED ORDERS.
+        self.localOrderBook = {}
 
     def Authenticate_Test(self):
         try:
@@ -60,15 +63,21 @@ class Trading212Broker:
         
         self.CheckForRateLimitCooldown()
 
+        
         try:
             payload = {
-                "limitPrice": limitPrice,
-                "quantity": amount,
-                "ticker": ticker,
-                "timeValidity": "DAY",
+                 "limitPrice": limitPrice,
+                 "quantity": amount,
+                 "ticker": ticker,
+                 "timeValidity": "DAY",
             }
 
-            print(payload)
+            #MARKET ORDER PAYLOAD
+            # payload = {
+            #     "extendedHours": True,
+            #     "quantity": amount,
+            #     "ticker": ticker,
+            # }
 
             headers = {
                 "Content-Type": "application/json",
@@ -76,6 +85,9 @@ class Trading212Broker:
             }
 
             result = requests.post(f"{self.base_url}/equity/orders/limit", json=payload, headers=headers, auth=HTTPBasicAuth(self.api_key, self.api_secret))
+
+            #MARKET ORDER REQUEST
+            # result = requests.post(f"{self.base_url}/equity/orders/market", json=payload, headers=headers, auth=HTTPBasicAuth(self.api_key, self.api_secret))
             # record the timestamp of this API request
             self.lastApiRequestTime = datetime.now()
 
@@ -110,64 +122,67 @@ class Trading212Broker:
                 "success": False
             }
         
-    def CheckOrderStatus(self, order):
+    def CheckOrderStatus(self, order: int, newMethod: bool = False, ticker: str = None):
         if(self.authTestResult == False):
             print("Cannot Check Order Status: Authentication Test Failed.")
             return {
                 "success": False
             }
-        
+    
         self.CheckForRateLimitCooldown()
 
-        try:
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": self.api_key
-            }
+        if newMethod:
+            # Update Order Book If Outdated (30 Minutes) TODO: Make This Time Configurable
+            if ticker not in self.localOrderBook.keys() or (datetime.now() - self.localOrderBook[ticker]["last_updated"]).total_seconds() >= 1800:
+                print("Order Book Outdated Or Not Found. Updating Local Order Book.")
 
-            result = requests.get(f"{self.base_url}/equity/orders/{order}", auth=HTTPBasicAuth(self.api_key, self.api_secret), headers=headers)
+                updatedOrderBook = self.UpdateLocalOrderBook(ticker)
 
-            self.lastApiRequestTime = datetime.now()
-
-            #Check If Order Was Cancelled
-            if(result.status_code == 404):
-                print(f"Order #{order} Not Found (Possibly Cancelled).")
-                return {
-                    "success": True,
-                    "filled": False,
-                    "order_id": order,
-                    "status": "CANCELLED"
-                }
-
-            if not (200 <= result.status_code < 300):
-                snippet = (result.text or "").strip()[:500]
-                print(f"CheckOrderStatus HTTP {result.status_code}: {snippet}")
-                return {
-                    "success": False,
-                }
-            
-            result = result.json()
-
-            if result.get("filledQuantity") == result.get("quantity"):
-                return {
-                    "success": True,
-                    "filled": True,
-                    "order_id": result.get("id"),
-                    "status": result.get("status")
-                }
+                if updatedOrderBook is not None:
+                    self.localOrderBook[ticker] = {
+                        "last_updated": datetime.now(),
+                        "orders": updatedOrderBook
+                    }
+                elif ticker in self.localOrderBook.keys():
+                    print("Failed To Update Local Order Book Before Checking Order Status. Using A Previous Version. Data May Be Outdated.")
+                else:
+                    print("Failed To Create Local Order Book Before Checking Order Status.")
+                    return {
+                        "success": False
+                    }
+                
+            # Check Local Order Book For Order Status
+            if order in self.localOrderBook[ticker]["orders"].keys():
+                orderData = self.localOrderBook[ticker]["orders"][order]
+                if orderData["status"] == "FILLED":
+                    return {
+                        "success": True,
+                        "filled": True,
+                        "order_id": order,
+                        "status": "FILLED"
+                    }
+                else:
+                    return {
+                        "success": True,
+                        "filled": False,
+                        "order_id": order,
+                        "status": orderData["status"]
+                    }
             else:
-                return {
-                    "success": True,
-                    "filled": False,
-                    "order_id": result.get("id"),
-                    "status": result.get("status")
-                }
-            
-        except Exception as e:
-            print(f"CheckOrderStatus Failed: {e}")
-            return {
-                "success": False
-            }
+                print(f"Order ID: {order} Not Found In Local Order Book. Possibly Still Pending.")
+                pendingCheckResults = self.CheckIfPendingOrder(order)
+
+                #If Order Is Still Pending, Add It To Local Order Book
+                if pendingCheckResults.get("success") and pendingCheckResults.get("status") != "CANCELLED":
+                    if self.localOrderBook[ticker]["orders"].get(order, None) is None:
+                        self.localOrderBook[ticker]["orders"][order] = {
+                            "status": pendingCheckResults.get("status"),
+                            "type": "UNKNOWN"
+                        }
+
+                return pendingCheckResults
+        else:
+            return self.CheckIfPendingOrder(order)
 
     def PlaceSellOrder(self, ticker, limitPrice, amount):
         if(self.authTestResult == False):
@@ -269,7 +284,6 @@ class Trading212Broker:
 
 
             result = result.json()
-            print(result)
 
             if betaNetDepositTest:
                 return result.get("cash").get("availableToTrade") + result.get("investments").get("totalCost")
@@ -369,4 +383,105 @@ class Trading212Broker:
         if elapsed < self.apiCooldown:
             remaining = self.apiCooldown - elapsed
             print(f"Waiting for API Cooldown: {int(remaining)} seconds")
-            time.sleep(remaining if remaining > 0 else 0)
+            sleep(remaining if remaining > 0 else 0)
+
+# TRADING 212 EXCLUSIVE METHODS ARE BELOW
+
+    # TRADING 212 EXCLUSIVE METHOD
+    def UpdateLocalOrderBook(self, ticker: str):
+        if(self.authTestResult == False):
+            print("Cannot Get Open Positions: Authentication Test Failed.")
+            return None
+        
+        self.CheckForRateLimitCooldown()
+
+        try:
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": self.api_key
+            }
+
+            query = {
+                "cursor": "0",
+                "ticker": ticker,
+                "limit": 50
+            }
+
+            result = requests.get(f"{self.base_url}/equity/history/orders", params=query, headers=headers, auth=HTTPBasicAuth(self.api_key, self.api_secret))
+
+            self.lastApiRequestTime = datetime.now()
+
+            if not (200 <= result.status_code < 300):
+                snippet = (result.text or "").strip()[:500]
+                print(f"GetOpenPositions HTTP {result.status_code}: {snippet}")
+                self.lastApiRequestTime = datetime.now()
+                return None
+
+            result = result.json()
+            allOrders = {}
+
+            for order in result.get("items"):
+                orderData = order.get("order")
+
+                if(orderData.get("status") != "CANCELLED"):
+                    allOrders[order.get("order").get("id")] = {
+                        "status": orderData.get("status"),
+                        "type": orderData.get("side")
+                    }
+
+            return allOrders
+        except Exception as e:
+            print(f"GetOpenPositions Failed: {e}")
+            return None
+        
+    # TRADING 212 EXCLUSIVE METHOD
+    def CheckIfPendingOrder(self, orderId: int):
+        try:
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": self.api_key
+            }
+
+            result = requests.get(f"{self.base_url}/equity/orders/{orderId}", auth=HTTPBasicAuth(self.api_key, self.api_secret), headers=headers)
+
+            self.lastApiRequestTime = datetime.now()
+
+            #Check If Order Was Cancelled
+            if(result.status_code == 404):
+                print(f"Order {orderId} Is Cancelled Or Does Not Exist.")
+                return {
+                    "success": True,
+                    "filled": False,
+                    "order_id": orderId,
+                    "status": "CANCELLED"
+                }
+
+            if not (200 <= result.status_code < 300):
+                snippet = (result.text or "").strip()[:500]
+                print(f"CheckOrderStatus HTTP {result.status_code}: {snippet}")
+                return {
+                    "success": False,
+                }
+            
+            result = result.json()
+
+            if result.get("filledQuantity") == result.get("quantity"):
+                return {
+                    "success": True,
+                    "filled": True,
+                    "order_id": result.get("id"),
+                    "status": result.get("status")
+                }
+            else:
+                return {
+                    "success": True,
+                    "filled": False,
+                    "order_id": result.get("id"),
+                    "status": result.get("status")
+                }
+            
+        except Exception as e:
+            print(f"CheckOrderStatus Failed: {e}")
+            return {
+                "success": False
+            }

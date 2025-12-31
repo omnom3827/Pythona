@@ -7,7 +7,7 @@ import pandas as pd
 import time
 
 class MultiStockTraderHandler:
-    def __init__(self, stockTickers: list[str], safteyBalancePercent: float = -1.0, exchangeTimesUpdateIntervalSeconds: int = 86400, tradingLoopWaitSeconds: int = 3600, stockDataInterval: str = "1h", stockDataPeriod: str = "1y",
+    def __init__(self, stockTickers: list[str], safteyBalancePercent: float = -1.0, exchangeTimesUpdateIntervalSeconds: int = 86400, tradingLoopWaitSeconds: int = 60, stockDataInterval: str = "1h", stockDataPeriod: str = "1y",
                  instance: MultiStockTradeStatus = None):
         self.tradingState = instance
         self.stockTraders = {}
@@ -97,11 +97,6 @@ class MultiStockTraderHandler:
                 print("Updating Exchange Hours...")
                 self.UpdateExchangeHours()
                 self.RefreshBalances(updateTraders=True)
-
-            if timeWaited >= self.tradingLoopWaitSeconds:
-                print("here")
-                # All Special Instructions Should Have Been Processed By Now
-                self.tradingState.StockInstructionsRan()
 
     def ThisWeekExchangeHours(self):
         exhangeHours = self.broker.GetExchangeHours()
