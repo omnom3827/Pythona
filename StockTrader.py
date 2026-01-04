@@ -1,7 +1,5 @@
 import json
 import pandas as pd
-import yfinance as yf
-import matplotlib.pyplot as plt
 import os
 import math
 import Strategy
@@ -241,7 +239,6 @@ class StockTrader:
                 stopLossPercent=self.stopLossPercent,
                 takeProfitPercent=self.takeProfitPercent,
                 trailingStopPercent=self.trailingStopPercent,
-                startingShares=self.activeTrades
             )
 
             strategy, roi = Backtest.RunBackTest()
@@ -411,6 +408,7 @@ class StockTrader:
                         "shares": floor_to_2dp(shares),
                         "ticker": ticker,
                         "price": floor_to_2dp(price + 2),
+                        "active_at": datetime.now()
                     }
             else:
                 print("Buy Order Failed To Place.")
@@ -665,6 +663,7 @@ class StockTrader:
                 "ticker": self.ticker,
                 "shares": openPosition.get("shares"),
                 "price": openPosition.get("price"),
+                "active_at": datetime.now()
             }
 
         for orderId in pendingOrders:

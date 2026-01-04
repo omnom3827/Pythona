@@ -9,7 +9,7 @@ def floor_to_2dp(value):
 
 class BackTestBroker:
     def __init__(self, ticker: str, startingBalance: float, period: str, interval: str, stopLossPercent: float, takeProfitPercent: float, 
-                 trailingStopPercent: float, startingShares: dict = {}, backtestGraphs: bool = False, cashedData: pd.DataFrame = None):
+                 trailingStopPercent: float, backtestGraphs: bool = False, cashedData: pd.DataFrame = None):
         self.ticker = ticker
         self.startingBalance = startingBalance
         self.balance = startingBalance
@@ -25,16 +25,6 @@ class BackTestBroker:
 
         self.benchmarkGraphs = backtestGraphs
         self.baseTrades = {}
-
-        #Convert Starting Shares
-        negativeIndex = len(startingShares) * -1
-        for trade in startingShares.values():
-            self.baseTrades[negativeIndex] = {
-                "shares": trade["shares"],
-                "price": trade["price"],
-                "highest_price": trade["price"]
-            }
-            negativeIndex += 1
 
     def RunBackTest(self, logResults: bool = True):
         bestTradeHistory = {}
