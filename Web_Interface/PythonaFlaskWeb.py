@@ -1,3 +1,4 @@
+from threading import Lock
 from flask import Flask, render_template, redirect, url_for, request, session, jsonify
 from MultiStockTraderInstance import MultiStockTradeStatus
 from time import time
@@ -11,11 +12,17 @@ dotenv.load_dotenv(".env")
 
 def CreateInterface(state: MultiStockTradeStatus) -> Flask:
     app = Flask(__name__, template_folder='Pages')
+
+    # Disable cache for static files
     app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+
+    # Session configuration
     app.secret_key = GetFlaskSecretKey()
     app.permanent_session_lifetime = 120
-    # track active logins and their expiry times
+
+    # Track active logins (thread-safe)
     app.active_logins = {}
+    app.active_logins_lock = Lock()
 
     @app.route('/')
     def home():
@@ -127,7 +134,9 @@ def CreateInterface(state: MultiStockTradeStatus) -> Flask:
         if not session.get('login_expires'):
             expires = int(time()) + int(app.permanent_session_lifetime.total_seconds())
             session['login_expires'] = expires
-            app.active_logins[session['username']] = expires
+
+            with app.active_logins_lock:
+                app.active_logins[session['username']] = expires
 
         data = state.SnapshotData()
         return render_template('HomePage.html', data=data)

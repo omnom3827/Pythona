@@ -2,6 +2,7 @@ from threading import Thread
 from MultiStockTraderInstance import MultiStockTradeStatus
 from MultiStockTraderHandler import MultiStockTraderHandler
 from Web_Interface.PythonaFlaskWeb import CreateInterface
+from waitress import serve
 
 instance = MultiStockTradeStatus()
 useWebInterface = True
@@ -30,7 +31,7 @@ if useWebInterface:
     multiStockTraderThread.start()
 
     app = CreateInterface(instance)
-    app.run(debug=False, port=5000, host='0.0.0.0', use_reloader=False)
+    serve(app, host='0.0.0.0', port=5000)
 else:
     MultiStockTraderHandler(
         **config,
