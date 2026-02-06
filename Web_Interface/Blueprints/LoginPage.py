@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, redirect, url_for, request, sessio
 import os
 import json
 from bcrypt import hashpw
-
+from Web_Interface.Functions.Auth import CheckLoginCredentials, GetUserPermissions, GetSalt
 
 def create_auth_blueprint(state):
 	auth = Blueprint('auth', __name__)
@@ -22,8 +22,6 @@ def create_auth_blueprint(state):
 	def login():
 		username = request.form.get('username')
 		password = request.form.get('password')
-
-		from Web_Interface.PythonaFlaskWeb import CheckLoginCredentials, GetUserPermissions
 
 		if CheckLoginCredentials(username, password):
 			session['username'] = username
@@ -51,8 +49,6 @@ def create_auth_blueprint(state):
 
 	@auth.route('/addUser', methods=['POST'])
 	def addUser():
-		from Web_Interface.PythonaFlaskWeb import GetSalt
-
 		userDetails = {
 			request.form.get("username"): {
 				"password": hashpw(request.form.get('password').encode('utf-8'), GetSalt()).decode('utf-8')
