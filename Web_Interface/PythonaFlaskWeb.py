@@ -7,6 +7,8 @@ import os
 import random
 import json
 from bcrypt import hashpw, gensalt, checkpw
+#Blueprints
+from Web_Interface.Blueprints.LoginPage import create_auth_blueprint
 
 dotenv.load_dotenv(".env")
 
@@ -24,111 +26,14 @@ def CreateInterface(state: MultiStockTradeStatus) -> Flask:
     app.active_logins = {}
     app.active_logins_lock = Lock()
 
-    @app.route('/')
-    def home():
-        #Check If A Credentials File Exists
-        if(os.path.exists("Web_Interface/Credentials/Credentials.json")):
-            return redirect(url_for('login_page'))
-        else:
-            return redirect(url_for('setup_page'))
-        
-    @app.route('/login', methods=['GET'])
-    def login_page():
-        return render_template('Login.html')
-    
-
-    @app.route('/login', methods=['POST'])
-    def login():
-        # Validate The Credentials
-        username = request.form.get('username')
-        password = request.form.get('password')
-
-        if CheckLoginCredentials(username, password):
-            session['username'] = username
-            session['premissions'] = GetUserPermissions(username)
-
-            #Check If We Got Any Permissions
-            if session['premissions'] is None:
-                session.pop('username', None)
-                return "User Has No Permissions Assigned", 403
-            
-            session.permanent = True
-            return redirect(url_for('dashboard'))
-        else:
-            # Render the login page with an error message so it can be displayed inline
-            return render_template('Login.html', error='Invalid username/password')
-    
-    @app.route('/setup', methods=['GET'])
-    def setup_page():
-        return render_template('Setup.html')
-    
-    @app.route('/addUser', methods=['GET'])
-    def addUser_page():
-        if(session.get('username') is None):
-            return redirect(url_for('home'))
-
-        return render_template('AddUser.html')
-    
-    @app.route('/addUser', methods=['POST'])
-    def addUser():
-        # Get Details From The Form
-        userDetails = {
-            request.form.get("username"): {
-                "password": hashpw(request.form.get('password').encode('utf-8'), GetSalt()).decode('utf-8')
-            }
-        }
-
-        #Check If The Credentials File Exists
-        if os.path.exists("Web_Interface/Credentials/Credentials.json"):
-            #Check The Users premissions
-            if session.get('premissions') != "root":
-                return render_template('AddUser.html', message='Invalid access premissions', success=False)
-            
-            #Load Existing Credentials
-            try:
-                with open("Web_Interface/Credentials/Credentials.json", "r") as f:
-                    existingCredentials = json.load(f)
-            except Exception as e:
-                return render_template('AddUser.html', message='Failed to read credentials file', success=False)
-            
-            #Add New User Details
-            existingCredentials[request.form.get("username")] = userDetails[request.form.get("username")]
-            existingCredentials[request.form.get("username")]["permissions"] = request.form.get("Access_Level", "user")
-
-            #Write Updated Credentials Back To File
-            try:
-                with open("Web_Interface/Credentials/Credentials.json", "w") as f:
-                    json.dump(existingCredentials, f)
-            except Exception as e:
-                return render_template('AddUser.html', message='Failed to write credentials', success=False)
-            
-            return render_template('AddUser.html', message='User updated', success=True)
-        else:
-            #Make The Credentials Directory
-            os.makedirs("Web_Interface/Credentials", exist_ok=True)
-
-            #Give All Permissions To The First User
-            userDetails[request.form.get("username")]["permissions"] = "root"
-
-            #Allow First Time User Creation
-            try:
-                with open("Web_Interface/Credentials/Credentials.json", "w") as f:
-                    json.dump(userDetails, f)
-            except Exception as e:
-                return f"Failed To Write Credentials: {e}", 500
-
-        # Show a confirmation message on the add-user page after first-user creation
-        return render_template('Login.html')
-
-    @app.route('/logout', methods=['POST'])
-    def logout():
-        session.pop('username', None)
-        return redirect(url_for('home'))
+    # Add Blueprints
+    auth_bp = create_auth_blueprint(state)
+    app.register_blueprint(auth_bp)
 
     @app.route('/dashboard')
     def dashboard():
         if(session.get('username') is None):
-            return redirect(url_for('home'))
+            return redirect(url_for('auth.home'))
         
         # ensure the session has an expires timestamp for the client
         if not session.get('login_expires'):
@@ -144,7 +49,7 @@ def CreateInterface(state: MultiStockTradeStatus) -> Flask:
     @app.route('/dashboard/stock/<ticker>')
     def stock_detail(ticker):
         if(session.get('username') is None):
-            return redirect(url_for('home'))
+            return redirect(url_for('auth.home'))
 
         data = state.SnapshotData()
         stocks = data.get('Stocks', {}) if data else {}
@@ -245,7 +150,6 @@ def CheckLoginCredentials(username: str, password: str) -> bool:
         return False
 
     storedPassword = credentials.get(username)["password"]
-    print(f"Stored Password: {storedPassword}")
 
     # Verify password using bcrypt.checkpw
     try:

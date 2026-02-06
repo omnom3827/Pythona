@@ -7,7 +7,7 @@
         <!-- Login Box -->
         <div id="Login_Box">
             <h1 id="Login_Title">Pythona Login</h1>
-            <form method="POST" action="{{ url_for('addUser') }}">
+            <form method="POST" action="{{ url_for('auth.addUser') }}">
                 <label for="username">Username:</label>
                 <input type="text" id="username" name="username" required>
                 <label for="password">Password:</label>
