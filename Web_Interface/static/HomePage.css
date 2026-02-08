@@ -121,8 +121,6 @@ body {
 }
 
 a.Stock.add-new {
-  text-decoration: none;
-  color: inherit;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -130,8 +128,6 @@ a.Stock.add-new {
 
 a.Stock.add-new h1 {
   margin: 0;
-  font-size: 1.1rem;
-  color: var(--text);
   font-weight: 600;
 }
 
@@ -142,8 +138,31 @@ a.Stock {
 }
 
 a.Stock h1,
-a.Stock h2,
-a.Stock .Stock-inner {
+a.Stock h2 {
   text-decoration: none;
+}
+
+/* Pending stock card */
+.Stock.pending {
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+/* Dismiss button on rejected pending cards */
+.dismiss-rejected {
+  margin-top: 8px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(239,68,68,0.12);
+  color: #ef4444;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform .08s ease, filter .08s ease;
+}
+
+.dismiss-rejected:hover {
+  filter: brightness(.9);
+  transform: translateY(-1px);
 }
 

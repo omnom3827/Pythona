@@ -4,6 +4,7 @@
   --muted: #9fb0c8;
   --accent: #3b82f6;
   --text: #e6eef8;
+  --danger: #ef4444;
 }
 
 html,
@@ -70,8 +71,6 @@ body {
   color: var(--text);
 }
 
-.detail-grid { display:block; }
-
 .detail-list {
   list-style: none;
   padding: 0;
@@ -116,9 +115,9 @@ body {
   outline: none;
 }
 .settings-row select:focus { box-shadow: 0 0 0 3px rgba(59,130,246,0.12); border-color: rgba(59,130,246,0.8); }
-.settings-row.placeholder .placeholder-box { color:var(--muted); font-size:0.95rem }
-.settings-actions { display:flex; align-items:center; gap:12px; margin-top:12px }
+.settings-actions { display: block; margin-top:12px }
 .settings-actions button {
+  display: inline-block;
   padding: 8px 12px;
   border-radius: 8px;
   border: none;
@@ -127,7 +126,8 @@ body {
   font-weight: 700;
   cursor: pointer;
   transition: transform .08s ease, filter .08s ease;
+  margin-right: 12px;
 }
 .settings-actions button:hover { filter: brightness(.95); transform: translateY(-1px); }
-.settings-status { margin-left:8px; color:var(--muted); font-weight:700 }
+.settings-status { display: block; margin-top: 8px; margin-left: 0; color:var(--muted); font-weight:700 }
 .settings-status.flash { color: var(--accent); }

@@ -2,11 +2,24 @@ document.addEventListener('DOMContentLoaded', function(){
     const form = document.getElementById('add-stock-form');
     if(!form) return;
 
+    const submitBtn = form.querySelector('button[type="submit"]');
+
+    let msgEl = null;
+    function clearMessage(){ if(msgEl){ msgEl.remove(); msgEl = null; } }
+    function showMessage(text, success){
+        clearMessage();
+        msgEl = document.createElement('p');
+        msgEl.id = success ? 'result_message_success' : 'result_message_failed';
+        msgEl.textContent = text;
+        form.appendChild(msgEl);
+    }
+
     form.addEventListener('submit', async function(e){
         e.preventDefault();
-        const data = {
-            ticker: form.ticker.value.trim(),
-        };
+        clearMessage();
+        if(submitBtn) submitBtn.disabled = true;
+
+        const data = { ticker: (form.ticker && form.ticker.value || '').trim() };
 
         try{
             const res = await fetch('/api/stocks', {
@@ -16,14 +29,23 @@ document.addEventListener('DOMContentLoaded', function(){
             });
 
             if(!res.ok){
-                const txt = await res.text();
-                alert('Failed to add stock: ' + (txt || res.statusText));
+                let msg = res.statusText;
+                try{
+                    const body = await res.json();
+                    if(body && body.message) msg = body.message;
+                } catch(_){
+                    try{ msg = await res.text(); } catch(_){}
+                }
+                showMessage('Failed to add stock: ' + msg, false);
+                if(submitBtn) submitBtn.disabled = false;
                 return;
-            } else {
-                window.location.href = '/dashboard';
             }
+
+            showMessage('Stock created — redirecting...', true);
+            setTimeout(()=> window.location.href = '/dashboard', 700);
         }catch(err){
-            alert('Error: ' + err);
+            showMessage('Error: ' + (err && err.message ? err.message : err), false);
+            if(submitBtn) submitBtn.disabled = false;
         }
     });
 });

@@ -34,13 +34,6 @@
         }
     }
 
-    ['takeProfit','stopLoss','trailingStop'].forEach(id => {
-        const el = document.getElementById(id);
-        if(el) el.addEventListener('change', () => {
-            postAction('optimiser');
-        });
-    });
-
     document.getElementById('run-optimiser')?.addEventListener('click', () => {
         postAction('optimiser');
     });
