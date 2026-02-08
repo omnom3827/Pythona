@@ -6,3 +6,4 @@ __pycache__/
 env/
 Web_Interface/Credentials/
 Tools/Legacy
+Config/

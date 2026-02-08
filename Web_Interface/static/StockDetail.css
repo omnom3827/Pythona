@@ -1,13 +1,8 @@
-/* StockDetail.css
-   Styles specific to the stock detail page. Kept self-contained so the
-   home page can remain lightweight and independent.
-*/
-
 :root {
-  --bg: #161616;
-  --panel: #0f172a;
-  --muted: #cbd5e1;
-  --accent: #007BFF;
+  --bg: #0b1020;
+  --panel: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  --muted: #9fb0c8;
+  --accent: #3b82f6;
   --text: #e6eef8;
 }
 
@@ -18,6 +13,8 @@ body {
   font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #Main_Box {
@@ -110,9 +107,27 @@ body {
 .settings-title { margin: 0 0 10px 0; color: var(--text); font-size:1.1rem }
 .settings-row { display:flex; align-items:center; gap:12px; margin:8px 0 }
 .settings-row label { width:160px; color:var(--muted); font-weight:600 }
-.settings-row select { padding:8px 10px; border-radius:6px; background:#07111a; color:var(--text); border:1px solid rgba(71,85,105,0.6) }
+.settings-row select {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(3,7,13,0.6);
+  color: var(--text);
+  border: 1px solid rgba(255,255,255,0.06);
+  outline: none;
+}
+.settings-row select:focus { box-shadow: 0 0 0 3px rgba(59,130,246,0.12); border-color: rgba(59,130,246,0.8); }
 .settings-row.placeholder .placeholder-box { color:var(--muted); font-size:0.95rem }
 .settings-actions { display:flex; align-items:center; gap:12px; margin-top:12px }
-.settings-actions button { padding:8px 12px; border-radius:8px; border:none; background:var(--accent); color:#fff; font-weight:700; cursor:pointer }
+.settings-actions button {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform .08s ease, filter .08s ease;
+}
+.settings-actions button:hover { filter: brightness(.95); transform: translateY(-1px); }
 .settings-status { margin-left:8px; color:var(--muted); font-weight:700 }
 .settings-status.flash { color: var(--accent); }

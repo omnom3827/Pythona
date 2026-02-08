@@ -5,6 +5,7 @@ from datetime import datetime
 from MultiStockTraderInstance import MultiStockTradeStatus
 import pandas as pd
 import time
+from SaveConfig import AppendStockTickerList, RemoveStockTickerList
 from TickerValidation import ValidateTicker
 
 class MultiStockTraderHandler:
@@ -81,7 +82,17 @@ class MultiStockTraderHandler:
                         if not tickerInfo.get("Processed"):
                             #Check Request Type
                             if tickerInfo.get("Remove"):
-                                print("Removing Tickers Is Not Currently Supported. Skipping.")
+                                print(f"Removing Ticker {ticker}")
+                                RemoveStockTickerList(ticker)
+
+                                #Remove Ticker From Memory
+                                if ticker in self.stockTraders:
+                                    del self.stockTraders[ticker]
+
+                                if ticker in self.traderRunHistory:
+                                    del self.traderRunHistory[ticker]
+
+                                print(f"Ticker {ticker} Removed From Trading List. Balance Will Be Redistributed On Next Update Loop.")
                             elif ValidateTicker(ticker, self.stockApi, self.broker):
                                 # Make A New Trader With No Money
                                 print(f"Adding New Ticker {ticker}")
@@ -90,6 +101,9 @@ class MultiStockTraderHandler:
                                 
                                 # Update The Request
                                 self.tradingState.UpdateStockStatus(ticker, "Added. Balance Assignment Pending.", False)
+
+                                # Add The Ticker To The Config File
+                                AppendStockTickerList(ticker)
 
                             else:
                                 print(f"Ticker {ticker} Is Invalid. Skipping.")

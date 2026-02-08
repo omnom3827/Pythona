@@ -3,23 +3,17 @@ from MultiStockTraderInstance import MultiStockTradeStatus
 from MultiStockTraderHandler import MultiStockTraderHandler
 from Web_Interface.PythonaFlaskWeb import CreateInterface
 from waitress import serve
+from SaveConfig import LoadFromConfig
 
 instance = MultiStockTradeStatus()
 useWebInterface = True
 
-config = {
-    "stockTickers": [
-        "AAPL_US_EQ",
-        # "GOOGL_US_EQ",
-        # "NVDA_US_EQ",
-        # "LAES_US_EQ",
-        # "MSFT_US_EQ",
-    ],
-}
+#Loading Config From File
+loadedConfig = LoadFromConfig()
 
 if useWebInterface:
     handler = MultiStockTraderHandler(
-        **config,
+        **loadedConfig,
         instance=instance
     )
 
@@ -34,5 +28,5 @@ if useWebInterface:
     serve(app, host='0.0.0.0', port=5000)
 else:
     MultiStockTraderHandler(
-        **config,
+        **loadedConfig,
     ).RunUpdateLoop()

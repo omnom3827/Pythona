@@ -1,10 +1,10 @@
-from flask import Blueprint, render_template, redirect, url_for, request, session
+from flask import Blueprint, render_template, redirect, url_for, request, session, current_app
 import os
 import json
 from bcrypt import hashpw
-from Web_Interface.Functions.Auth import CheckLoginCredentials, GetUserPermissions, GetSalt
+from Web_Interface.Functions.Auth import CheckLoginCredentials, GetUserPermissions, GetSalt, GetAllValidUsers
 
-def create_auth_blueprint(state):
+def LoginBlueprint(state):
 	auth = Blueprint('auth', __name__)
 
 	@auth.route('/')
@@ -25,9 +25,9 @@ def create_auth_blueprint(state):
 
 		if CheckLoginCredentials(username, password):
 			session['username'] = username
-			session['premissions'] = GetUserPermissions(username)
+			session['permissions'] = GetUserPermissions(username)
 
-			if session['premissions'] is None:
+			if session['permissions'] is None:
 				session.pop('username', None)
 				return "User Has No Permissions Assigned", 403
 
@@ -42,7 +42,7 @@ def create_auth_blueprint(state):
 
 	@auth.route('/addUser', methods=['GET'])
 	def addUser_page():
-		if session.get('username') is None:
+		if session.get('username') is None or session.get('username') not in current_app.config['VALID_USERS']:
 			return redirect(url_for('auth.home'))
 
 		return render_template('AddUser.html')
@@ -56,23 +56,31 @@ def create_auth_blueprint(state):
 		}
 
 		if os.path.exists("Web_Interface/Credentials/Credentials.json"):
-			if session.get('premissions') != "root":
-				return render_template('AddUser.html', message='Invalid access premissions', success=False)
+			if session.get('permissions') != "root" and session.get('username') != request.form.get("username"):
+				return render_template('AddUser.html', message='Invalid access permissions', success=False)
+			
+			#Check We Are Not Overwriting Current Users Access Permissions
+			if session.get('username') == request.form.get('username') and session.get('permissions') != request.form.get('permissions', 'user'):
+				print(f"UNAUTHORIZED PERMISSIONS CHANGE ATTEMPT: User {session.get('username')} Attempted To Change Their Own Access Permissions From {session.get('permissions')} To {request.form.get('permissions', 'user')}. WE HAVE AUTOMATICALLY BLOCKED THIS ACTION.")
+				return render_template('AddUser.html', message='Cannot Change Your Own Access Permissions', success=False)
 
 			try:
 				with open("Web_Interface/Credentials/Credentials.json", "r") as f:
 					existingCredentials = json.load(f)
 			except Exception:
-				return render_template('AddUser.html', message='Failed to read credentials file', success=False)
+				return render_template('AddUser.html', message='Failed to Read Credentials File', success=False)
 
 			existingCredentials[request.form.get("username")] = userDetails[request.form.get("username")]
-			existingCredentials[request.form.get("username")]["permissions"] = request.form.get("Access_Level", "user")
+			existingCredentials[request.form.get("username")]["permissions"] = request.form.get("permissions", "user")
 
 			try:
 				with open("Web_Interface/Credentials/Credentials.json", "w") as f:
 					json.dump(existingCredentials, f)
 			except Exception:
-				return render_template('AddUser.html', message='Failed to write credentials', success=False)
+				return render_template('AddUser.html', message='Failed To Write Credentials', success=False)
+
+			# Update Valid Users List
+			current_app.config['VALID_USERS'] = GetAllValidUsers()
 
 			return render_template('AddUser.html', message='User updated', success=True)
 		else:
@@ -82,6 +90,9 @@ def create_auth_blueprint(state):
 			try:
 				with open("Web_Interface/Credentials/Credentials.json", "w") as f:
 					json.dump(userDetails, f)
+
+				# Update Valid Users List
+				current_app.config['VALID_USERS'] = GetAllValidUsers()
 			except Exception as e:
 				return f"Failed To Write Credentials: {e}", 500
 

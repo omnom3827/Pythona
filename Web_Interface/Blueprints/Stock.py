@@ -1,12 +1,12 @@
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, jsonify, request, session, current_app
 from MultiStockTraderInstance import MultiStockTradeStatus
 
-def create_stock_blueprint(state: MultiStockTradeStatus):
+def create_stock_blueprint(state: MultiStockTradeStatus) -> Blueprint:
     bp = Blueprint('stock_api', __name__)
 
     @bp.route('/api/stocks', methods=['POST'])
     def add_stock():
-        if(session.get('username') is None):
+        if(session.get('username') is None or session['username'] not in current_app.config['VALID_USERS']):
             print("Unauthorized Access Attempted To Add Stock")
             return jsonify({'error': 'Unauthorized'}), 401
 

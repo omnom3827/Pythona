@@ -34,7 +34,7 @@
 
             <div id="User_Info">
                 {% set uname = session.get('username') %}
-                {% set perms = session.get('premissions') %}
+                {% set perms = session.get('permissions') %}
                 {% if uname %}
                 <span>{{ uname }}: {{ perms }}</span>
                 {% endif %}

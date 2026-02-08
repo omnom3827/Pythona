@@ -84,3 +84,14 @@ def GetUserPermissions(username: str) -> str:
         return None
 
     return credentials.get(username)["permissions"]
+
+def GetAllValidUsers() -> list:
+    #Load The Credentials File
+    try:
+        with open("Web_Interface/Credentials/Credentials.json", "r") as f:
+            credentials = json.load(f)
+    except Exception as e:
+        print(f"Failed To Load Credentials File: {e}")
+        return []
+
+    return list(credentials.keys())

@@ -5,11 +5,11 @@
    ---------- */
 
 :root {
-  --bg: #161616;         /* main background */
-  --panel: #0f172a;      /* card / panel background */
-  --muted: #cbd5e1;      /* muted text */
-  --accent: #007BFF;     /* blue accent */
-  --text: #e6eef8;       /* primary text */
+  --bg: #0b1020;
+  --panel: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  --muted: #9fb0c8;
+  --accent: #3b82f6;
+  --text: #e6eef8;
 }
 
 /* Page basics */
@@ -20,6 +20,8 @@ body {
   font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Main layout */
@@ -84,6 +86,7 @@ body {
   color: #fff;
   text-decoration: none;
   font-weight: 600;
+  transition: transform .08s ease, filter .08s ease;
 }
 
 .Stock:hover {

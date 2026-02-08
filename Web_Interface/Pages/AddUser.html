@@ -1,12 +1,12 @@
 <html>
     <head>
-        <title>Pythona Login</title>
-        <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='Setup.css') }}">
+        <title>Pythona Add User</title>
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='AddUser.css') }}">
     </head>
     <body>
-        <!-- Login Box -->
-        <div id="Login_Box">
-            <h1 id="Login_Title">Pythona Login</h1>
+        <!-- Add User Box -->
+        <div id="Add_User_Box">
+            <h1 id="Add_User_Title">Pythona Add User</h1>
             <form method="POST" action="{{ url_for('auth.addUser') }}">
                 <label for="username">Username:</label>
                 <input type="text" id="username" name="username" required>

@@ -4,10 +4,10 @@ from MultiStockTraderInstance import MultiStockTradeStatus
 from time import time
 import dotenv
 #Blueprints
-from Web_Interface.Blueprints.LoginPage import create_auth_blueprint
+from Web_Interface.Blueprints.LoginPage import LoginBlueprint
 from Web_Interface.Blueprints.Stock import create_stock_blueprint
 #Functions
-from Web_Interface.Functions.Auth import GetFlaskSecretKey
+from Web_Interface.Functions.Auth import GetFlaskSecretKey, GetAllValidUsers
 
 dotenv.load_dotenv(".env")
 
@@ -25,15 +25,19 @@ def CreateInterface(state: MultiStockTradeStatus) -> Flask:
     app.active_logins = {}
     app.active_logins_lock = Lock()
 
+    #Valid Users List
+    app.config['VALID_USERS'] = GetAllValidUsers()
+
     # Add Blueprints
-    auth_bp = create_auth_blueprint(state)
+    auth_bp = LoginBlueprint(state)
     app.register_blueprint(auth_bp)
     stock_bp = create_stock_blueprint(state)
     app.register_blueprint(stock_bp)
 
+
     @app.route('/dashboard')
     def dashboard():
-        if(session.get('username') is None):
+        if(session.get('username') is None or session['username'] not in app.config['VALID_USERS']):
             return redirect(url_for('auth.home'))
         
         # ensure the session has an expires timestamp for the client
@@ -49,7 +53,7 @@ def CreateInterface(state: MultiStockTradeStatus) -> Flask:
 
     @app.route('/dashboard/stock/<ticker>')
     def stock_detail(ticker):
-        if(session.get('username') is None):
+        if(session.get('username') is None or session['username'] not in app.config['VALID_USERS']):
             return redirect(url_for('auth.home'))
 
         data = state.SnapshotData()
@@ -66,14 +70,20 @@ def CreateInterface(state: MultiStockTradeStatus) -> Flask:
     
     @app.route('/stock/<ticker>/optimiser', methods=['POST'])
     def stock_optimiser(ticker):
+        if session.get('username') is None or session['username'] not in app.config['VALID_USERS']:
+            return jsonify(message='Unauthorized'), 401
+        
         print(f"Stock optimiser requested for {ticker}")
-        # TODO: hook into StockOptimiser / backtester
+
         state.UpdateStockInstructions(ticker, {"optimiser_requested": True})
 
         return jsonify(message='optimiser started'), 200
 
     @app.route('/stock/<ticker>/backtest', methods=['POST'])
     def stock_backtest(ticker):
+        if session.get('username') is None or session['username'] not in app.config['VALID_USERS']:
+            return jsonify(message='Unauthorized'), 401
+
         print(f"Stock Backtest Requested For {ticker}")
 
         state.UpdateStockInstructions(ticker, {"backtest_requested": True})
@@ -82,6 +92,9 @@ def CreateInterface(state: MultiStockTradeStatus) -> Flask:
 
     @app.route('/stock/<ticker>/apply_config', methods=['POST'])
     def stock_apply_config(ticker):
+        if session.get('username') is None or session['username'] not in app.config['VALID_USERS']:
+            return jsonify(message='Unauthorized'), 401
+
         try:
             payload = request.get_json() or {}
         except Exception:
@@ -95,14 +108,14 @@ def CreateInterface(state: MultiStockTradeStatus) -> Flask:
 
     @app.route('/add_stock')
     def add_stock_page():
-        if session.get('username') is None:
+        if session.get('username') is None or session['username'] not in app.config['VALID_USERS']:
             return redirect(url_for('auth.home'))
         
         return render_template('AddStock.html')
 
     @app.route('/api/pending/seen', methods=['POST'])
     def MakeStockFailAsSeen():
-        if session.get('username') is None:
+        if session.get('username') is None or session['username'] not in app.config['VALID_USERS']:
             return jsonify(message='Unauthorized'), 401
 
         data = request.get_json() or {}
