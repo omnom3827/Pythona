@@ -324,11 +324,19 @@ class Trading212Broker:
 
             result = result.json()
 
-            return {
+            # Check If Result Is Empty
+            if not result:
+                return {
+                    "id": 0,
+                    "shares": 0,
+                    "price": 0
+                }
+            else:
+                return {
                 "id": 0,
                 "shares": result[0].get("quantityAvailableForTrading"),
                 "price": result[0].get("averagePricePaid"),
-            }
+                }
         except Exception as e:
             print(f"GetOpenPositions Failed: {e}")
             return None

@@ -5,6 +5,7 @@ from datetime import datetime
 from MultiStockTraderInstance import MultiStockTradeStatus
 import pandas as pd
 import time
+from TickerValidation import ValidateTicker
 
 class MultiStockTraderHandler:
     def __init__(self, stockTickers: list[str], safteyBalancePercent: float = -1.0, exchangeTimesUpdateIntervalSeconds: int = 86400, tradingLoopWaitSeconds: int = 600, stockDataInterval: str = "1h", stockDataPeriod: str = "1y",
@@ -71,6 +72,28 @@ class MultiStockTraderHandler:
                 #Check For Special Instructions
                 if self.tradingState is not None:
                     specialInstructions = self.tradingState.GetAllInstructions()
+                    
+                    # Loop Through Each Ticker Addition/Removal Requests
+                    for ticker in self.tradingState.SnapshotData().get("PendingStocks"):
+                        tickerInfo = self.tradingState.SnapshotData().get("PendingStocks").get(ticker)
+
+                        #Check If It Has Been Processed
+                        if not tickerInfo.get("Processed"):
+                            #Check Request Type
+                            if tickerInfo.get("Remove"):
+                                print("Removing Tickers Is Not Currently Supported. Skipping.")
+                            elif ValidateTicker(ticker, self.stockApi, self.broker):
+                                # Make A New Trader With No Money
+                                print(f"Adding New Ticker {ticker}")
+                                self.stockTraders[ticker] = StockTrader(ticker=ticker, balance=0, benchmarkGraphs=False, broker=self.broker,
+                                                                        stockMultiHandler=self, stockDataInterval="1h", stockDataPeriod="1y", marketToTradeIn=self.GetExchangeFromTicker(ticker), stocksApi=self.stockApi)
+                                
+                                # Update The Request
+                                self.tradingState.UpdateStockStatus(ticker, "Added. Balance Assignment Pending.", False)
+
+                            else:
+                                print(f"Ticker {ticker} Is Invalid. Skipping.")
+                                self.tradingState.UpdateStockStatus(ticker, "Rejected. Invalid Ticker. Does Your Broker Need The Exchange Suffix?", True)
 
                     # Loop Through Each Ticker's Instructions
                     for ticker in specialInstructions:
@@ -190,3 +213,10 @@ class MultiStockTraderHandler:
             # Update Each Trader's Balance
             for trader in self.stockTraders.values():
                 trader.UpdateBalance(balancePerTrader)
+
+                # Check If This Is A Pending Stock
+                if trader.ticker in self.tradingState.SnapshotData().get("PendingStocks", {}):
+                    #Rerun Backtest
+                    trader.UpdateStrategy()
+
+                    self.tradingState.RemovePendingStock(trader.ticker)

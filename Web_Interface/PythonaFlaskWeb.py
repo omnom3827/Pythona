@@ -5,6 +5,7 @@ from time import time
 import dotenv
 #Blueprints
 from Web_Interface.Blueprints.LoginPage import create_auth_blueprint
+from Web_Interface.Blueprints.Stock import create_stock_blueprint
 #Functions
 from Web_Interface.Functions.Auth import GetFlaskSecretKey
 
@@ -20,13 +21,15 @@ def CreateInterface(state: MultiStockTradeStatus) -> Flask:
     app.secret_key = GetFlaskSecretKey()
     app.permanent_session_lifetime = 120
 
-    # Track active logins (thread-safe)
+    # Track active logins
     app.active_logins = {}
     app.active_logins_lock = Lock()
 
     # Add Blueprints
     auth_bp = create_auth_blueprint(state)
     app.register_blueprint(auth_bp)
+    stock_bp = create_stock_blueprint(state)
+    app.register_blueprint(stock_bp)
 
     @app.route('/dashboard')
     def dashboard():
@@ -50,7 +53,7 @@ def CreateInterface(state: MultiStockTradeStatus) -> Flask:
             return redirect(url_for('auth.home'))
 
         data = state.SnapshotData()
-        stocks = data.get('Stocks', {}) if data else {}
+        stocks = data.get('Stocks', {})
         selected = None
         for key, val in stocks.items():
             if key.lower() == ticker.lower():
@@ -60,6 +63,7 @@ def CreateInterface(state: MultiStockTradeStatus) -> Flask:
             return render_template('StockDetail.html', ticker=ticker, stock=None)
         # pass the ticker (readable) and the stock dictionary
         return render_template('StockDetail.html', ticker=selected[0], stock=selected[1])
+    
     @app.route('/stock/<ticker>/optimiser', methods=['POST'])
     def stock_optimiser(ticker):
         print(f"Stock optimiser requested for {ticker}")
@@ -88,5 +92,26 @@ def CreateInterface(state: MultiStockTradeStatus) -> Flask:
         state.UpdateStockInstructions(ticker, {"config_updates": payload})
 
         return jsonify(message='config update applied'), 200
+
+    @app.route('/add_stock')
+    def add_stock_page():
+        if session.get('username') is None:
+            return redirect(url_for('auth.home'))
+        
+        return render_template('AddStock.html')
+
+    @app.route('/api/pending/seen', methods=['POST'])
+    def MakeStockFailAsSeen():
+        if session.get('username') is None:
+            return jsonify(message='Unauthorized'), 401
+
+        data = request.get_json() or {}
+        ticker = data.get('ticker')
+        if not ticker:
+            return jsonify(message='Ticker not provided'), 400
+
+        print(f"Pending Stock {ticker} Has Been Marked As Seen By {session['username']}. Removing From Pending List.")
+        state.RemovePendingStock(ticker)
+        return jsonify(message='Pending stock marked as seen'), 200
 
     return app

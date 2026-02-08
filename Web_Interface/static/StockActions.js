@@ -1,4 +1,3 @@
-// StockActions.js - moved from inline script in StockDetail.html
 (function(){
     const mainBox = document.getElementById('Main_Box');
     const status = document.getElementById('stock-settings-status');

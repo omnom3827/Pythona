@@ -18,6 +18,11 @@ class BackTestBroker:
         self.takeProfitPercent = takeProfitPercent
         self.trailingStopPercent = trailingStopPercent
 
+        #Check Starting Balance Is Not 0
+        if self.startingBalance <= 0:
+            print(f"Starting Balance For Ticcker {self.ticker} Is 0 Or Negative. Defaulting To 1.")
+            self.startingBalance = 1
+
         if cashedData is None:
             self.data = self.stockApi.GetStockData(self.ticker, period, interval)
         else:
@@ -44,6 +49,7 @@ class BackTestBroker:
             merged_data['Signal'] = merged_data['Signal'].fillna(0)  # Fill missing signals with 0
             
             self.balance = self.startingBalance
+
             activeTrades = self.baseTrades.copy()
             tradeHistory = {}
             

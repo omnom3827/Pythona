@@ -117,3 +117,30 @@ body {
   #User_Info { right: 8px; bottom: 8px; padding: 8px; font-size: 12px; }
 }
 
+a.Stock.add-new {
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+a.Stock.add-new h1 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--text);
+  font-weight: 600;
+}
+
+a.Stock {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+a.Stock h1,
+a.Stock h2,
+a.Stock .Stock-inner {
+  text-decoration: none;
+}
+

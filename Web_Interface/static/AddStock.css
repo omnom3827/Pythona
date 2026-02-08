@@ -1,0 +1,92 @@
+:root {
+    --bg: #161616;
+    --panel: #0f172a;
+    --muted: #cbd5e1;
+    --accent: #007BFF;
+    --accent-dark: #0064d6;
+}
+
+html,
+body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: #e6eef8;
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+#Main_Box {
+    max-width: 520px;
+    margin: 40px auto;
+    padding: 24px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent), var(--panel);
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(2,6,23,0.6);
+    border: 1px solid rgba(255,255,255,0.03);
+}
+
+#Main_Title {
+    margin: 0 0 14px;
+    font-size: 28px;
+    text-align: center;
+    color: #fff;
+    font-weight: 600;
+}
+
+#add-stock-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+#add-stock-form label {
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+#ticker {
+    width: 100%;
+    padding: 10px 12px;
+    margin-top: 6px;
+    border-radius: 8px;
+    border: 1px solid rgba(71,85,105,0.6);
+    background: #07111a;
+    color: #e6eef8;
+    box-sizing: border-box;
+}
+
+#ticker:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0,123,255,0.12);
+    border-color: var(--accent);
+}
+
+#add-stock-form button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 10px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 700;
+}
+
+#add-stock-form button:hover {
+    filter: brightness(.95);
+}
+
+#add-stock-form a {
+    color: var(--muted);
+    text-decoration: none;
+    margin-left: 12px;
+}
+
+#add-stock-form a:hover {
+    text-decoration: underline;
+}
+
+@media (max-width: 560px) {
+    #Main_Box { margin: 18px; padding: 18px; }
+    #Main_Title { font-size: 22px; }
+}

@@ -211,6 +211,23 @@ class StockTrader:
     def UpdateBalance(self, newBalance: float):
         self.balance = floor_to_2dp(newBalance)
 
+        # Update Runtime History For New Balance
+        latest_price = self.signals.iloc[-1]['Close']
+        total_invested = sum(t["shares"] * latest_price for t in self.activeTrades.values())
+        pending_total = sum(t["shares"] * t["price"] for t in self.pendingTrades.values())
+        total_value = self.balance + total_invested
+        self.stockMultiHandler.traderRunHistory[self.ticker] = {
+            "Cash": f"£{self.balance:.2f}",
+            "Invested": f"£{total_invested:.2f}",
+            "Total": f"£{total_value:.2f}",
+            "Positions": len(self.activeTrades),
+            "Pending Orders": len(self.pendingTrades),
+            "Pending Positions Value": pending_total,
+            "Current Trade Strategy": self.strategy.name,
+            "Estimated ROI": f"{self.becnhmarkRoi*100:.2f}%"
+        }
+
+
     def GetStrategy(self, strategy: str):
         strategy_map = {
             "MAC": lambda: Strategy.MovingAverageCrossover(short_window=50, long_window=200),

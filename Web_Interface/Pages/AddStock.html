@@ -1,0 +1,24 @@
+<html>
+    <head>
+        <title>Add New Stock</title>
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='HomePage.css') }}">
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='AddStock.css') }}">
+    </head>
+    <body>
+        <div id="Main_Box">
+            <h1 id="Main_Title">Add New Stock</h1>
+
+            <form id="add-stock-form">
+                <label for="ticker">Stock Ticker (e.g. AAPL_US_EQ)</label>
+                <input id="ticker" name="ticker" required />
+
+                <div style="margin-top:12px">
+                    <button type="submit">Create Stock</button>
+                    <a href="{{ url_for('dashboard') }}" style="margin-left:12px">Cancel</a>
+                </div>
+            </form>
+        </div>
+
+        <script src="{{ url_for('static', filename='AddStock.js') }}"></script>
+    </body>
+</html>

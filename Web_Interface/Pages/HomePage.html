@@ -10,14 +10,26 @@
             <div id="Stock_Grid">
                 <!-- Stock Items will be dynamically inserted here -->
                 {% for key, stock in data['Stocks'].items() %}
-                  <div class="Stock" id="stock-{{ key }}">
-                    <h1>{{ key.split('_')[0] }}</h1>
-                    <h2>Current Trading Strategy: {{ stock['Current Trade Strategy'] }}</h2>
-                    <h2>ROI Estimate: {{ stock['Estimated ROI'] }}</h2>
-                    <h2>Cash: {{ stock['Cash'] }}</h2>
-                        <a class="detail-btn" href="{{ url_for('stock_detail', ticker=key) }}">View Details</a>
-                  </div>
+                    <a class="Stock" id="stock-{{ key }}" href="{{ url_for('stock_detail', ticker=key) }}">
+                        <h1>{{ key.split('_')[0] }}</h1>
+                        <h2>Current Trading Strategy: {{ stock['Current Trade Strategy'] }}</h2>
+                        <h2>ROI Estimate: {{ stock['Estimated ROI'] }}</h2>
+                        <h2>Cash: {{ stock['Cash'] }}</h2>
+                    </a>
                 {% endfor %}
+                {% for key, stock in data['PendingStocks'].items() %}
+                    <a class="Stock pending" id="stock-{{ key }}">
+                        <h1>{{ key.split('_')[0] }}</h1>
+                        <h2>Status: {{ stock['Status'] }}</h2>
+                        {% if stock['Rejected'] %}
+                            <button class="dismiss-rejected" data-ticker="{{ key }}" title="Mark seen and remove">✕</button>
+                        {% endif %}
+                    </a>
+                {% endfor %}
+                <!-- Blank card to add a new stock -->
+                <a class="Stock add-new" href="{{ url_for('add_stock_page') }}" id="add-new-stock">
+                    <h1>Add New Stock</h1>
+                </a>
             </div>
 
             <div id="User_Info">
@@ -29,4 +41,5 @@
             </div>
         </div>
     </body>
+    <script src="{{ url_for('static', filename='HomePage.js') }}"></script>
 </html>

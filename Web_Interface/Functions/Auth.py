@@ -1,7 +1,7 @@
 import os
 import json
 import random
-from bcrypt import hashpw, gensalt, checkpw
+from bcrypt import gensalt, checkpw
 
 def GetFlaskSecretKey() -> str:
     key = os.getenv("WEB_INTERFACE_KEY", None)
