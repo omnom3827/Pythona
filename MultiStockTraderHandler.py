@@ -75,8 +75,10 @@ class MultiStockTraderHandler:
                     specialInstructions = self.tradingState.GetAllInstructions()
                     
                     # Loop Through Each Ticker Addition/Removal Requests
-                    for ticker in self.tradingState.SnapshotData().get("PendingStocks"):
-                        tickerInfo = self.tradingState.SnapshotData().get("PendingStocks").get(ticker)
+                    snapshot = self.tradingState.SnapshotData()
+                    for ticker in snapshot.get("PendingStocks"):
+                        time.sleep(10)
+                        tickerInfo = snapshot.get("PendingStocks").get(ticker)
 
                         #Check If It Has Been Processed
                         if not tickerInfo.get("Processed"):
@@ -229,7 +231,8 @@ class MultiStockTraderHandler:
                 trader.UpdateBalance(balancePerTrader)
 
                 # Check If This Is A Pending Stock
-                if trader.ticker in self.tradingState.SnapshotData().get("PendingStocks", {}):
+                snapshot = self.tradingState.SnapshotData()
+                if trader.ticker in snapshot.get("PendingStocks", {}):
                     #Rerun Backtest
                     trader.UpdateStrategy()
 

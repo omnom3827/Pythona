@@ -1,4 +1,5 @@
 from threading import Lock
+import copy
 
 class MultiStockTradeStatus:
     def __init__(self):
@@ -21,7 +22,7 @@ class MultiStockTradeStatus:
 
     def SnapshotData(self):
         with self.lock:
-            return dict(self.data)
+            return copy.deepcopy(self.data)
         
     def UpdateStockInstructions(self, ticker: str, dict: dict):
         with self.lock:
@@ -37,11 +38,11 @@ class MultiStockTradeStatus:
 
     def GetStockInstructions(self, ticker: str) -> dict:
         with self.lock:
-            return self.specialInstructions.get(ticker, {})
+            return copy.deepcopy(self.specialInstructions.get(ticker, {}))
         
     def GetAllInstructions(self) -> dict:
         with self.lock:
-            return dict(self.specialInstructions)
+            return copy.deepcopy(self.specialInstructions)
         
     def AddNewStock(self, ticker: str):
         with self.lock:

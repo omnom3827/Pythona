@@ -20,7 +20,7 @@ class BackTestBroker:
 
         #Check Starting Balance Is Not 0
         if self.startingBalance <= 0:
-            print(f"Starting Balance For Ticcker {self.ticker} Is 0 Or Negative. Defaulting To 1.")
+            print(f"Starting Balance For Ticker {self.ticker} Is 0 Or Negative. Defaulting To 1.")
             self.startingBalance = 1
 
         if cashedData is None:
