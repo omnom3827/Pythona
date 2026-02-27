@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Pythona Add User</title>
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='AddUser.css') }}">
+    </head>
+    <body>
+        <!-- Add User Box -->
+        <div id="Add_User_Box">
+            <h1 id="Add_User_Title">Pythona Add User</h1>
+            <form method="POST" action="{{ url_for('auth.addUser') }}">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" required>
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+                <label for="permissions">Access Level:</label>
+                <select name="permissions" id="permissions">
+                    <option value="root">Root (FULL ACCESS)</option>
+                    <option value="admin">Admin (FULL STOCK ACCESS)</option>
+                    <option value="user" selected>User (VIEW ONLY)</option>
+                </select>
+                <button type="submit">Make User</button>
+            </form>
+            {% if message %}
+                {% if success %}
+                    <p id="result_message_success"> {{ message }}</p>
+                {% else %}
+                    <p id="result_message_failed"> {{ message }}</p>
+                {% endif %}
+            {% endif %}
+        </div>
+    </body>
+</html>

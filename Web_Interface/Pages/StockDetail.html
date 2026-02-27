@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Stock Details - {{ ticker }}</title>
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='StockDetail.css') }}">
+    </head>
+    <body>
+        <div id="Main_Box" data-ticker="{{ ticker }}">
+            <h1 id="Main_Title">Details for {{ ticker }}</h1>
+            <div class="detail-panel">
+                {% if stock %}
+                    <h2 class="detail-title">Overview</h2>
+
+                    <div class="detail-grid">
+                        <ul class="detail-list">
+                        {% for k, v in stock.items() %}
+                            <li>
+                                <span class="detail-key">{{ k }}</span>
+                                <span class="detail-val">{{ v }}</span>
+                            </li>
+                        {% endfor %}
+                        </ul>
+                    </div>
+                {% else %}
+                    <p class="detail-empty">Stock '{{ ticker }}' not found.</p>
+                {% endif %}
+
+                <p class="back-link"><a href="{{ url_for('dashboard') }}">← Back to dashboard</a></p>
+
+                <!-- Per-stock settings (placeholder for future web editing) -->
+                <section class="settings-panel">
+                    <div class="settings-actions">
+                        <button type="button" id="run-optimiser">Run Stock Optimiser</button>
+                        <button type="button" id="run-backtest">Run Stock Backtest</button>
+                        <span id="stock-settings-status" class="settings-status"></span>
+                    </div>
+                </section>
+            </div>
+            <div id="User_Info">
+                {% set uname = session.get('username') %}
+                {% set perms = session.get('permissions') %}
+                {% if uname %}
+                <span>{{ uname }}: {{ perms }}</span>
+                {% endif %}
+            </div>
+        </div>
+    
+    <script src="{{ url_for('static', filename='StockActions.js') }}"></script>
+    </body>
+</html>

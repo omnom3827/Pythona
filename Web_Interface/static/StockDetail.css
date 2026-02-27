@@ -1,0 +1,133 @@
+:root {
+  --bg: #0b1020;
+  --panel: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  --muted: #9fb0c8;
+  --accent: #3b82f6;
+  --text: #e6eef8;
+  --danger: #ef4444;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#Main_Box {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 18px;
+}
+
+#Main_Title {
+  color: #fff;
+  text-align: left;
+  margin: 6px 0 18px 6px;
+  font-weight: 600;
+  font-size: 1.4rem;
+}
+
+/* bottom-right user info box */
+#User_Info {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  background: rgba(15, 23, 42, 0.6);
+  color: var(--muted);
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  font-size: 13px;
+}
+
+@media (max-width: 520px) {
+  #Main_Title { text-align: center; }
+  #User_Info { right: 8px; bottom: 8px; padding: 8px; font-size: 12px; }
+}
+
+/* Stock detail panel (used on StockDetail.html) */
+.detail-panel {
+  max-width: 900px;
+  margin: 0 auto;
+  background: var(--panel);
+  color: var(--text);
+  padding: 24px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.03);
+  box-shadow: 0 10px 30px rgba(2,6,23,0.5);
+}
+
+.detail-title {
+  margin: 0 0 12px 0;
+  font-size: 1.6rem;
+  color: var(--text);
+}
+
+.detail-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.detail-list li {
+  display:flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px dashed rgba(255,255,255,0.03);
+}
+
+.detail-key { color: var(--muted); font-weight:700; }
+.detail-val { color: var(--text); text-align:right; }
+
+.detail-empty { color: var(--muted); }
+
+.back-link { margin-top: 14px; }
+.back-link a { color: var(--accent); text-decoration: none; font-weight: 600; }
+.back-link a:hover { text-decoration: underline; }
+
+/* Settings panel styles */
+.settings-panel {
+  margin-top: 18px;
+  background: rgba(255,255,255,0.02);
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.03);
+}
+
+.settings-title { margin: 0 0 10px 0; color: var(--text); font-size:1.1rem }
+.settings-row { display:flex; align-items:center; gap:12px; margin:8px 0 }
+.settings-row label { width:160px; color:var(--muted); font-weight:600 }
+.settings-row select {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(3,7,13,0.6);
+  color: var(--text);
+  border: 1px solid rgba(255,255,255,0.06);
+  outline: none;
+}
+.settings-row select:focus { box-shadow: 0 0 0 3px rgba(59,130,246,0.12); border-color: rgba(59,130,246,0.8); }
+.settings-actions { display: block; margin-top:12px }
+.settings-actions button {
+  display: inline-block;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform .08s ease, filter .08s ease;
+  margin-right: 12px;
+}
+.settings-actions button:hover { filter: brightness(.95); transform: translateY(-1px); }
+.settings-status { display: block; margin-top: 8px; margin-left: 0; color:var(--muted); font-weight:700 }
+.settings-status.flash { color: var(--accent); }

@@ -21,8 +21,8 @@ class RiskCalculatorMixin:
     def calculate_risk(self, data: pd.DataFrame, idx: int, *,
                        current_capital: float = 0.0, current_shares: float = 0.0,
                        mode: str = "buy",
-                       base_risk: float = 0.05, k_atr: float = 3.0,
-                       min_risk: float = 0.01, max_risk: float = 0.20) -> tuple[float, float]:
+                       base_risk: float = 0.12, k_atr: float = 3.0,
+                       min_risk: float = 0.03, max_risk: float = 0.40) -> tuple[float, float]:
         """
         Return risk factor in [0,1] and suggested shares to buy/sell (up to 2dp fractional) for the trade at bar `idx`.
 
@@ -83,22 +83,19 @@ class RiskCalculatorMixin:
                 concentration_adj = 1.2  # allow more aggressive sizing
 
         # Available capital adjustment: INCREASE risk when high cash available
-        # This is appropriate for small accounts or single-stock strategies
+        # Modified for multi-stock portfolios: only apply when cash is EXTREMELY low
+        # This allows each stock trader to use its allocated balance independently
         capital_adj = 1.0
         if total_equity > 0:
             cash_pct = current_capital / total_equity
-            # Interpretation: high cash = more room to invest = higher risk tolerance
-            # Low cash = already invested = maintain current positions
-            if cash_pct > 0.9:  # > 90% cash (almost fully uninvested)
-                capital_adj = 1.5  # Very aggressive - deploy capital
-            elif cash_pct > 0.7:  # > 70% cash (mostly uninvested)
-                capital_adj = 1.3  # Aggressive
-            elif cash_pct > 0.5:  # > 50% cash (half uninvested)
-                capital_adj = 1.1  # Slightly aggressive
-            elif cash_pct < 0.2:  # < 20% cash (mostly invested)
-                capital_adj = 0.9  # Slightly conservative
-            elif cash_pct < 0.1:  # < 10% cash (nearly fully invested)
+            # Only reduce risk when cash is critically low (nearly fully invested)
+            # This prevents multi-stock scenarios from being overly conservative
+            if cash_pct < 0.05:  # < 5% cash (critically low)
                 capital_adj = 0.7  # Conservative - preserve remaining cash
+            elif cash_pct < 0.10:  # < 10% cash (very low)
+                capital_adj = 0.85  # Slightly conservative
+            # Otherwise maintain neutral capital_adj = 1.0
+            # This treats each trader's allocation as independent
 
         # Compose adjustments and compute a heuristic risk_pct
         adj = vol_adj * trend_adj * concentration_adj * capital_adj
@@ -120,8 +117,9 @@ class RiskCalculatorMixin:
             # Higher risk factor = more aggressive exit (sell more)
             # Use risk factor to scale from partial to full exit
             if current_shares > 0:
-                # Base sell: proportional to risk factor (0.5 = sell 50%, 1.0 = sell 100%)
-                sell_pct = 0.5 + (normalized * 0.5)  # maps [0,1] → [0.5, 1.0] (sell 50%-100%)
+                # OPTIMIZED: More aggressive sells (70%-100% instead of 50%-100%)
+                # This improves ROI by taking profits more decisively
+                sell_pct = 0.70 + (normalized * 0.30)  # maps [0,1] → [0.70, 1.0] (sell 70%-100%)
                 suggested_shares = current_shares * sell_pct
                 # Round to 2 decimal places
                 suggested_shares = round(min(suggested_shares, current_shares), 2)

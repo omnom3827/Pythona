@@ -1,5 +1,9 @@
 Trading_Graphs/
 TradingHistory/
 .env
+.vscode/
 __pycache__/
 env/
+Web_Interface/Credentials/
+Tools/Legacy
+Config/

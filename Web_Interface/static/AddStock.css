@@ -1,0 +1,124 @@
+:root {
+    --bg: #0b1020;
+    --panel: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    --muted: #9fb0c8;
+    --accent: #3b82f6;
+    --text: #e6eef8;
+    --success: #16a34a;
+    --danger: #ef4444;
+}
+
+html,
+body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 12px;
+}
+
+#Main_Box {
+    width: 420px;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 28px;
+    background: var(--panel);
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(2,6,23,0.6);
+    border: 1px solid rgba(255,255,255,0.03);
+}
+
+#Main_Title {
+    margin: 0 0 16px 0;
+    font-size: 20px;
+    text-align: center;
+    color: #fff;
+    font-weight: 600;
+}
+
+#add-stock-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+#add-stock-form label {
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+#ticker {
+    width: 100%;
+    padding: 10px 12px;
+    margin-top: 8px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(3,7,13,0.6);
+    color: var(--text);
+    box-sizing: border-box;
+    outline: none;
+}
+
+#ticker:focus {
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+    border-color: rgba(59,130,246,0.8);
+}
+
+/* Shared button base for submit, cancel link, and secondary buttons */
+#add-stock-form button,
+#add-stock-form a.btn-cancel {
+    display: block;
+    width: 100%;
+    margin-top: 12px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    text-align: center;
+    text-decoration: none;
+    font-weight: 700;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: transform .08s ease, filter .08s ease;
+}
+
+#add-stock-form button:hover,
+#add-stock-form a.btn-cancel:hover {
+    filter: brightness(.95);
+    transform: translateY(-1px);
+}
+
+/* Secondary / ghost button override */
+#add-stock-form button[type="button"] {
+    border: 1px solid rgba(255,255,255,0.04);
+    background: rgba(255,255,255,0.02);
+    color: var(--muted);
+}
+
+/* Result messages */
+#result_message_success,
+#result_message_failed {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+#result_message_success { background: rgba(22,163,74,0.12); color: var(--success); }
+#result_message_failed  { background: rgba(239,68,68,0.08); color: var(--danger); }
+
+@media (max-width: 560px) {
+    #Main_Box { margin: 18px; padding: 18px; }
+    #Main_Title { font-size: 18px; }
+}
